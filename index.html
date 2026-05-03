@@ -1,12 +1,335 @@
 <!DOCTYPE html>
 <html lang="fr">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Rébus Chogan</title>
-  </head>
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/source/main.jsx"></script>
-  </body>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Rébus Chogan</title>
+  <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=Lato:wght@300;400;700&display=swap" rel="stylesheet"/>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: #0d3826; }
+    input::placeholder { color: rgba(245,236,215,0.4); }
+    ::-webkit-scrollbar { width: 4px; }
+    ::-webkit-scrollbar-thumb { background: #c9a84c44; border-radius: 4px; }
+    @keyframes fadeIn { from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)} }
+    @keyframes flash { 0%,100%{transform:scale(1)}50%{transform:scale(1.08)} }
+    @keyframes fadeUp { from{opacity:0;transform:translateY(30px)}to{opacity:1;transform:translateY(0)} }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="text/babel">
+    const { useState, useRef } = React;
+
+    const G = {
+      dark: "#0d3826", gold: "#c9a84c", goldL: "#e8c97a",
+      cream: "#f5ecd7", green: "#1a5c3a"
+    };
+
+    const defaultQ = [
+      { id:1, label:"Concentration 30% - Essence de Parfum", points:10, answer:"Essence de Parfum", hint:"Concentration entre EDP et Parfum" },
+      { id:2, label:"Extrait de Parfum", points:15, answer:"Extrait de Parfum", hint:"La concentration la plus haute" },
+      { id:3, label:"Huile de Pur Arbre à Thé (Tea Tree)", points:10, answer:"Huile Tea Tree", hint:"Produit naturel aux vertus purifiantes" },
+      { id:4, label:"Huile de Monoï Tahitien", points:20, answer:"Huile Monoï", hint:"Originaire de Polynésie" },
+      { id:5, label:"Extrait de Parfum 35ml", points:25, answer:"Extrait 35ml", hint:"Format collector exclusif" },
+    ];
+
+    const defaultC = [
+      { id:1, name:"Marie", score:0, color:"#e8c97a" },
+      { id:2, name:"Sophie", score:0, color:"#7ecba1" },
+      { id:3, name:"Léa", score:0, color:"#e87a7a" },
+    ];
+
+    const Logo = () => (
+      <div style={{display:"flex",alignItems:"center",gap:10}}>
+        <div style={{width:40,height:40,background:`linear-gradient(135deg,${G.gold},${G.goldL})`,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,fontWeight:900,color:G.dark,fontFamily:"serif"}}>✿</div>
+        <span style={{fontFamily:"'Playfair Display',serif",fontSize:22,fontWeight:700,letterSpacing:4,color:G.gold}}>CHOGAN</span>
+      </div>
+    );
+
+    const inp = {background:"rgba(255,255,255,0.08)",border:`1px solid ${G.gold}44`,borderRadius:8,padding:"8px 12px",color:G.cream,fontFamily:"inherit",fontSize:14,outline:"none",width:"100%"};
+
+    function Setup({ onStart }) {
+      const [cons, setCons] = useState(defaultC);
+      const [qs, setQs] = useState(defaultQ);
+      const [name, setName] = useState("");
+      const [tab, setTab] = useState("c");
+      const colors = ["#e8c97a","#7ecba1","#e87a7a","#87c8e8","#c87ae8"];
+
+      const addC = () => {
+        if (!name.trim() || cons.length >= 5) return;
+        setCons(p => [...p, {id:Date.now(),name:name.trim(),score:0,color:colors[p.length%colors.length]}]);
+        setName("");
+      };
+
+      return (
+        <div style={{minHeight:"100vh",background:`linear-gradient(160deg,${G.dark},#0a2a1c)`,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",fontFamily:"'Lato',sans-serif",padding:24}}>
+          <div style={{marginBottom:32,textAlign:"center"}}>
+            <Logo/>
+            <h1 style={{color:G.cream,fontFamily:"'Playfair Display',serif",fontSize:36,margin:"12px 0 4px",letterSpacing:6}}>RÉBUS</h1>
+            <p style={{color:`${G.gold}aa`,fontSize:13,letterSpacing:2}}>CONFIGURATION DU JEU</p>
+          </div>
+
+          <div style={{width:"100%",maxWidth:600,background:"rgba(255,255,255,0.04)",borderRadius:16,border:`1px solid ${G.gold}22`,overflow:"hidden"}}>
+            <div style={{display:"flex",borderBottom:`1px solid ${G.gold}22`}}>
+              {[["c","👥 Consultantes"],["q","📋 Questions"]].map(([t,l]) => (
+                <button key={t} onClick={()=>setTab(t)} style={{flex:1,padding:16,border:"none",cursor:"pointer",fontFamily:"inherit",fontSize:13,fontWeight:700,letterSpacing:2,textTransform:"uppercase",background:tab===t?`${G.gold}18`:"transparent",color:tab===t?G.gold:`${G.cream}66`,borderBottom:tab===t?`2px solid ${G.gold}`:"2px solid transparent"}}>
+                  {l} ({tab==="c"?cons.length:qs.length})
+                </button>
+              ))}
+            </div>
+
+            <div style={{padding:24,maxHeight:400,overflowY:"auto"}}>
+              {tab==="c" && (
+                <div>
+                  <div style={{display:"flex",gap:8,marginBottom:16}}>
+                    <input value={name} onChange={e=>setName(e.target.value)} onKeyDown={e=>e.key==="Enter"&&addC()} placeholder="Nom de la consultante..." style={inp}/>
+                    <button onClick={addC} style={{padding:"8px 14px",borderRadius:8,border:"none",cursor:"pointer",background:`linear-gradient(135deg,${G.gold},${G.goldL})`,color:G.dark,fontFamily:"inherit",fontWeight:700,whiteSpace:"nowrap"}}>+ Ajouter</button>
+                  </div>
+                  {cons.map(c => (
+                    <div key={c.id} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 14px",background:"rgba(255,255,255,0.04)",borderRadius:10,marginBottom:8,border:`1px solid ${c.color}22`}}>
+                      <div style={{width:32,height:32,borderRadius:"50%",background:c.color,display:"flex",alignItems:"center",justifyContent:"center",color:"#000",fontWeight:700}}>{c.name[0]}</div>
+                      <input value={c.name} onChange={e=>setCons(p=>p.map(x=>x.id===c.id?{...x,name:e.target.value}:x))} style={{...inp,flex:1,width:"auto"}}/>
+                      <button onClick={()=>setCons(p=>p.filter(x=>x.id!==c.id))} style={{background:"rgba(255,80,80,0.15)",border:"none",color:"#e87a7a",cursor:"pointer",borderRadius:6,padding:"6px 10px",fontFamily:"inherit"}}>✕</button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {tab==="q" && (
+                <div>
+                  {qs.map((q,i) => (
+                    <div key={q.id} style={{background:"rgba(255,255,255,0.04)",borderRadius:10,padding:14,marginBottom:12,border:`1px solid ${G.gold}22`}}>
+                      <div style={{display:"flex",justifyContent:"space-between",marginBottom:10}}>
+                        <span style={{color:G.gold,fontWeight:700,fontSize:13}}>QUESTION {i+1}</span>
+                        <button onClick={()=>setQs(p=>p.filter(x=>x.id!==q.id))} style={{background:"rgba(255,80,80,0.15)",border:"none",color:"#e87a7a",cursor:"pointer",borderRadius:6,padding:"4px 8px",fontFamily:"inherit",fontSize:12}}>Supprimer</button>
+                      </div>
+                      <div style={{display:"grid",gap:8}}>
+                        <input value={q.label} onChange={e=>setQs(p=>p.map(x=>x.id===q.id?{...x,label:e.target.value}:x))} placeholder="Intitulé..." style={inp}/>
+                        <input value={q.answer} onChange={e=>setQs(p=>p.map(x=>x.id===q.id?{...x,answer:e.target.value}:x))} placeholder="Réponse attendue..." style={inp}/>
+                        <input value={q.hint} onChange={e=>setQs(p=>p.map(x=>x.id===q.id?{...x,hint:e.target.value}:x))} placeholder="Indice (optionnel)..." style={inp}/>
+                        <div style={{display:"flex",alignItems:"center",gap:8}}>
+                          <span style={{color:G.cream,fontSize:13,opacity:.7}}>Points :</span>
+                          <input type="number" value={q.points} onChange={e=>setQs(p=>p.map(x=>x.id===q.id?{...x,points:parseInt(e.target.value)||0}:x))} style={{...inp,width:80}}/>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                  <button onClick={()=>setQs(p=>[...p,{id:Date.now(),label:"Nouvelle question",points:10,answer:"",hint:""}])} style={{padding:"10px 20px",borderRadius:8,border:"none",cursor:"pointer",background:"rgba(255,255,255,0.08)",color:G.cream,fontFamily:"inherit",width:"100%"}}>+ Ajouter une question</button>
+                </div>
+              )}
+            </div>
+
+            <div style={{padding:"20px 24px",borderTop:`1px solid ${G.gold}22`,display:"flex",justifyContent:"flex-end"}}>
+              <button onClick={()=>onStart(cons,qs)} disabled={cons.length===0||qs.length===0} style={{padding:"14px 40px",borderRadius:10,border:"none",cursor:"pointer",fontFamily:"inherit",fontSize:15,fontWeight:700,letterSpacing:3,background:`linear-gradient(135deg,${G.gold},${G.goldL})`,color:G.dark,textTransform:"uppercase",opacity:cons.length===0||qs.length===0?.5:1}}>
+                🎮 LANCER LE JEU
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    function Game({ consultants:initC, questions, onReset }) {
+      const [cons, setCons] = useState(initC.map(c=>({...c,score:0})));
+      const [idx, setIdx] = useState(0);
+      const [answers, setAnswers] = useState({});
+      const [revealed, setRevealed] = useState([]);
+      const [phase, setPhase] = useState("question");
+      const [selC, setSelC] = useState(null);
+      const [flash, setFlash] = useState(null);
+      const [final, setFinal] = useState(false);
+      const [img, setImg] = useState(null);
+      const fileRef = useRef();
+
+      const q = questions[idx];
+      const isLast = idx === questions.length - 1;
+
+      const award = (cid, pts) => {
+        setCons(p=>p.map(c=>c.id===cid?{...c,score:c.score+pts}:c));
+        setFlash(cid); setTimeout(()=>setFlash(null),1000);
+        setAnswers(p=>({...p,[idx]:{cid,pts}}));
+        setRevealed(p=>[...p,idx]);
+        setPhase("validate");
+      };
+
+      const next = () => {
+        if (isLast) { setFinal(true); return; }
+        setIdx(i=>i+1); setSelC(null); setPhase("question"); setImg(null);
+      };
+
+      if (final) return <Final consultants={[...cons].sort((a,b)=>b.score-a.score)} onReset={onReset}/>;
+
+      return (
+        <div style={{minHeight:"100vh",background:`linear-gradient(160deg,${G.dark},#0a2a1c)`,fontFamily:"'Lato',sans-serif",display:"flex",flexDirection:"column"}}>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"14px 24px",borderBottom:`1px solid ${G.gold}22`,background:"rgba(0,0,0,0.2)"}}>
+            <Logo/>
+            <h1 style={{color:G.gold,fontFamily:"'Playfair Display',serif",fontSize:28,letterSpacing:8}}>RÉBUS</h1>
+            <div style={{display:"flex",gap:8}}>
+              <button onClick={onReset} style={{background:"rgba(255,255,255,0.06)",border:`1px solid ${G.gold}33`,color:G.cream,borderRadius:8,padding:"6px 12px",cursor:"pointer",fontFamily:"inherit",fontSize:12}}>⚙ Config</button>
+              <button onClick={()=>setFinal(true)} style={{background:"rgba(255,255,255,0.06)",border:`1px solid ${G.gold}33`,color:G.cream,borderRadius:8,padding:"6px 12px",cursor:"pointer",fontFamily:"inherit",fontSize:12}}>🏆</button>
+            </div>
+          </div>
+
+          <div style={{flex:1,display:"grid",gridTemplateColumns:"240px 1fr 220px",overflow:"hidden"}}>
+            {/* Question list */}
+            <div style={{padding:16,borderRight:`1px solid ${G.gold}18`,overflowY:"auto",display:"flex",flexDirection:"column",gap:8}}>
+              {questions.map((qu,i) => {
+                const done = revealed.includes(i);
+                const active = i===idx;
+                const wc = done&&answers[i]?cons.find(c=>c.id===answers[i]?.cid):null;
+                return (
+                  <div key={qu.id} onClick={()=>{setIdx(i);setPhase(done?"validate":"question");setImg(null);}} style={{padding:"10px 12px",borderRadius:10,cursor:"pointer",background:active?`${G.gold}18`:"rgba(255,255,255,0.04)",border:`1px solid ${active?G.gold+"66":"transparent"}`,opacity:done&&!active?.65:1,transition:"all 0.2s"}}>
+                    <div style={{display:"flex",gap:8,alignItems:"flex-start"}}>
+                      <div style={{width:24,height:24,borderRadius:"50%",background:active?`linear-gradient(135deg,${G.gold},${G.goldL})`:"rgba(255,255,255,0.08)",display:"flex",alignItems:"center",justifyContent:"center",color:active?G.dark:G.cream,fontWeight:900,fontSize:11,flexShrink:0}}>{done?"✓":i+1}</div>
+                      <div style={{flex:1}}>
+                        <div style={{color:active?G.gold:G.cream,fontSize:11,fontWeight:700,lineHeight:1.3}}>{done?qu.label:`Q${i+1}`}</div>
+                        <div style={{display:"flex",justifyContent:"space-between",marginTop:2}}>
+                          <span style={{fontSize:10,color:`${G.gold}aa`}}>{qu.points}pts</span>
+                          {wc&&<span style={{fontSize:10,color:wc.color,fontWeight:700}}>✓{wc.name}</span>}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Center */}
+            <div style={{padding:24,display:"flex",flexDirection:"column",gap:16}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                <div>
+                  <div style={{color:`${G.gold}99`,fontSize:11,letterSpacing:3,textTransform:"uppercase",marginBottom:4}}>Question {idx+1}/{questions.length}</div>
+                  <h2 style={{color:G.cream,fontFamily:"'Playfair Display',serif",fontSize:20}}>{phase==="question"?"🔍 Devinez le produit !":q.label}</h2>
+                </div>
+                <div style={{background:`${G.gold}22`,border:`1px solid ${G.gold}55`,borderRadius:10,padding:"8px 16px",textAlign:"center"}}>
+                  <div style={{color:G.gold,fontSize:22,fontWeight:900,fontFamily:"'Playfair Display',serif"}}>{q.points}</div>
+                  <div style={{color:`${G.gold}88`,fontSize:10,letterSpacing:2}}>PTS</div>
+                </div>
+              </div>
+
+              <div style={{flex:1,background:"rgba(255,255,255,0.03)",borderRadius:16,border:`1px solid ${G.gold}18`,display:"flex",alignItems:"center",justifyContent:"center",position:"relative",overflow:"hidden",minHeight:180,maxHeight:260}}>
+                {img ? (
+                  <>
+                    <img src={img} style={{maxHeight:"100%",maxWidth:"100%",objectFit:"contain",filter:phase==="question"?"blur(14px) brightness(0.6)":"none",transition:"filter 0.8s"}} alt="produit"/>
+                    {phase==="question"&&<div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center"}}><div style={{background:"rgba(13,56,38,0.7)",borderRadius:10,padding:"10px 20px",border:`1px solid ${G.gold}33`}}><p style={{color:G.gold,margin:0,fontSize:12,fontWeight:700,letterSpacing:2}}>IMAGE MASQUÉE</p></div></div>}
+                    <button onClick={()=>fileRef.current.click()} style={{position:"absolute",top:8,right:8,background:"rgba(0,0,0,0.5)",border:`1px solid ${G.gold}33`,color:G.cream,cursor:"pointer",borderRadius:6,padding:"3px 8px",fontSize:11}}>🔄</button>
+                  </>
+                ) : (
+                  <div style={{textAlign:"center",padding:24}}>
+                    <div style={{fontSize:40,marginBottom:10,opacity:.4}}>🧴</div>
+                    <button onClick={()=>fileRef.current.click()} style={{background:`${G.gold}18`,border:`1px dashed ${G.gold}44`,color:`${G.gold}aa`,cursor:"pointer",borderRadius:8,padding:"8px 16px",fontFamily:"inherit",fontSize:13}}>📷 Ajouter une image</button>
+                  </div>
+                )}
+                <input ref={fileRef} type="file" accept="image/*" onChange={e=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=ev=>setImg(ev.target.result);r.readAsDataURL(f);}} style={{display:"none"}}/>
+              </div>
+
+              {q.hint&&<div style={{padding:"8px 14px",borderRadius:8,background:`${G.gold}0d`,border:`1px solid ${G.gold}22`,display:"flex",gap:8,alignItems:"center"}}><span style={{color:G.gold}}>💡</span><span style={{color:`${G.cream}aa`,fontSize:13}}><strong style={{color:G.gold}}>Indice :</strong> {q.hint}</span></div>}
+
+              {phase==="question"&&(
+                <div style={{background:"rgba(255,255,255,0.04)",borderRadius:12,padding:16,border:`1px solid ${G.gold}22`}}>
+                  <p style={{color:`${G.gold}cc`,fontSize:11,letterSpacing:2,textTransform:"uppercase",marginBottom:12}}>✏ Valider une réponse correcte</p>
+                  <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:12}}>
+                    {cons.map(c=>(
+                      <button key={c.id} onClick={()=>setSelC(c.id===selC?null:c.id)} style={{padding:"6px 14px",borderRadius:20,border:`2px solid ${c.id===selC?c.color:c.color+"44"}`,background:c.id===selC?c.color+"22":"transparent",color:c.id===selC?c.color:`${c.color}99`,cursor:"pointer",fontFamily:"inherit",fontSize:13,fontWeight:700}}>{c.name}</button>
+                    ))}
+                  </div>
+                  <div style={{display:"flex",gap:8}}>
+                    <button onClick={()=>selC&&award(selC,q.points)} disabled={!selC} style={{flex:1,padding:"10px",borderRadius:8,border:"none",cursor:selC?"pointer":"not-allowed",background:selC?`linear-gradient(135deg,${G.gold},${G.goldL})`:"rgba(255,255,255,0.08)",color:selC?G.dark:`${G.cream}44`,fontFamily:"inherit",fontWeight:700}}>✓ Valider</button>
+                    <button onClick={()=>{setRevealed(p=>[...p,idx]);setPhase("validate");}} style={{padding:"10px 14px",borderRadius:8,border:`1px solid rgba(255,80,80,0.3)`,background:"rgba(255,80,80,0.08)",color:"#e87a7a",cursor:"pointer",fontFamily:"inherit"}}>Passer ✗</button>
+                  </div>
+                </div>
+              )}
+
+              {phase==="validate"&&(
+                <div style={{display:"flex",flexDirection:"column",gap:12,alignItems:"center"}}>
+                  <div style={{padding:"12px 24px",borderRadius:10,background:`${G.gold}15`,border:`1px solid ${G.gold}44`,textAlign:"center"}}>
+                    {answers[idx]?<span style={{color:G.gold,fontWeight:700}}>🎉 +{q.points}pts → {cons.find(c=>c.id===answers[idx]?.cid)?.name}</span>:<span style={{color:`${G.cream}88`}}>❌ Réponse : <strong style={{color:G.cream}}>{q.answer}</strong></span>}
+                  </div>
+                  <button onClick={next} style={{padding:"12px 36px",borderRadius:10,border:"none",cursor:"pointer",background:`linear-gradient(135deg,${G.gold},${G.goldL})`,color:G.dark,fontFamily:"inherit",fontWeight:700,fontSize:14,letterSpacing:2,textTransform:"uppercase"}}>
+                    {isLast?"🏆 Résultats finaux":"Question suivante →"}
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Scores */}
+            <div style={{padding:16,borderLeft:`1px solid ${G.gold}18`,display:"flex",flexDirection:"column",gap:10}}>
+              <p style={{color:`${G.gold}99`,fontSize:11,letterSpacing:3,textTransform:"uppercase",margin:"0 0 4px"}}>SCORES</p>
+              {[...cons].sort((a,b)=>b.score-a.score).map((c,i)=>(
+                <div key={c.id} style={{padding:"12px 14px",borderRadius:12,background:flash===c.id?`${c.color}22`:"rgba(255,255,255,0.04)",border:`1px solid ${i===0&&c.score>0?c.color+"44":G.gold+"15"}`,animation:flash===c.id?"flash 0.8s ease":"none",transition:"background 0.3s"}}>
+                  <div style={{display:"flex",alignItems:"center",gap:8}}>
+                    <span style={{fontSize:14}}>{i===0&&c.score>0?"👑":i===1?"🥈":"🥉"}</span>
+                    <div style={{flex:1}}>
+                      <div style={{color:c.color,fontWeight:700,fontSize:13}}>{c.name}</div>
+                    </div>
+                    <div style={{color:G.gold,fontFamily:"'Playfair Display',serif",fontSize:20,fontWeight:900}}>{c.score}</div>
+                  </div>
+                  <div style={{marginTop:8,height:3,background:"rgba(255,255,255,0.08)",borderRadius:2}}>
+                    <div style={{height:"100%",borderRadius:2,width:`${Math.max(4,(c.score/Math.max(1,Math.max(...cons.map(x=>x.score))))*100)}%`,background:c.color,transition:"width 0.5s"}}/>
+                  </div>
+                </div>
+              ))}
+              <div style={{marginTop:"auto",padding:"12px 14px",borderRadius:12,background:"rgba(255,255,255,0.03)",border:`1px solid ${G.gold}15`}}>
+                <p style={{color:`${G.gold}88`,fontSize:11,letterSpacing:2,margin:"0 0 8px"}}>PROGRESSION</p>
+                <div style={{height:4,background:"rgba(255,255,255,0.08)",borderRadius:4}}>
+                  <div style={{height:"100%",borderRadius:4,width:`${(revealed.length/questions.length)*100}%`,background:`linear-gradient(90deg,${G.gold},${G.goldL})`,transition:"width 0.4s"}}/>
+                </div>
+                <p style={{color:`${G.cream}66`,fontSize:11,margin:"6px 0 0",textAlign:"right"}}>{revealed.length}/{questions.length}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    function Final({ consultants, onReset }) {
+      const w = consultants[0];
+      return (
+        <div style={{minHeight:"100vh",background:`radial-gradient(ellipse at center,#1a5c3a,${G.dark} 60%,#050f08)`,fontFamily:"'Lato',sans-serif",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:32}}>
+          <div style={{textAlign:"center",marginBottom:40,animation:"fadeUp 0.8s ease"}}>
+            <div style={{fontSize:64,marginBottom:12}}>🏆</div>
+            <h1 style={{color:G.gold,fontFamily:"'Playfair Display',serif",fontSize:42,margin:"0 0 8px"}}>FIN DU JEU</h1>
+            <p style={{color:`${G.cream}88`,fontSize:14,letterSpacing:4}}>RÉBUS CHOGAN — RÉSULTATS FINAUX</p>
+          </div>
+          {w&&w.score>0&&(
+            <div style={{textAlign:"center",marginBottom:32,animation:"fadeUp 0.8s ease 0.2s both"}}>
+              <div style={{display:"inline-block",padding:"20px 40px",borderRadius:16,background:`${G.gold}15`,border:`2px solid ${G.gold}55`}}>
+                <div style={{fontSize:28,marginBottom:6}}>👑</div>
+                <div style={{color:G.gold,fontFamily:"'Playfair Display',serif",fontSize:28,fontWeight:900}}>{w.name}</div>
+                <div style={{color:`${G.cream}88`,fontSize:13,marginTop:4}}>GAGNANTE — {w.score} points</div>
+              </div>
+            </div>
+          )}
+          <div style={{display:"flex",gap:14,flexWrap:"wrap",justifyContent:"center",marginBottom:40}}>
+            {consultants.map((c,i)=>(
+              <div key={c.id} style={{padding:"16px 24px",borderRadius:14,background:i===0?`${c.color}18`:"rgba(255,255,255,0.04)",border:`1px solid ${i===0?c.color+"55":G.gold+"18"}`,textAlign:"center",minWidth:120,animation:`fadeUp 0.6s ease ${0.4+i*0.1}s both`}}>
+                <div style={{fontSize:22,marginBottom:6}}>{i===0?"🥇":i===1?"🥈":"🥉"}</div>
+                <div style={{color:c.color,fontWeight:700,fontSize:16,marginBottom:4}}>{c.name}</div>
+                <div style={{color:G.gold,fontFamily:"'Playfair Display',serif",fontSize:28,fontWeight:900}}>{c.score}</div>
+                <div style={{color:`${G.cream}55`,fontSize:11}}>points</div>
+              </div>
+            ))}
+          </div>
+          <button onClick={onReset} style={{padding:"14px 40px",borderRadius:12,border:"none",cursor:"pointer",background:`linear-gradient(135deg,${G.gold},${G.goldL})`,color:G.dark,fontFamily:"inherit",fontSize:15,fontWeight:700,letterSpacing:3,textTransform:"uppercase"}}>
+            🔄 NOUVELLE PARTIE
+          </button>
+        </div>
+      );
+    }
+
+    function App() {
+      const [phase, setPhase] = useState("setup");
+      const [data, setData] = useState(null);
+      const start = (c,q) => { setData({c,q}); setPhase("game"); };
+      const reset = () => { setData(null); setPhase("setup"); };
+      if (phase==="setup") return <Setup onStart={start}/>;
+      return <Game consultants={data.c} questions={data.q} onReset={reset}/>;
+    }
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+  </script>
+</body>
 </html>
