@@ -3,60 +3,81 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Rébus Chogan — Limitless Team</title>
+  <title>Rébus Chogan</title>
   <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=Lato:wght@300;400;700&display=swap" rel="stylesheet"/>
   <style>
     *{box-sizing:border-box;margin:0;padding:0}
-    body{background:#0d3826;font-family:'Lato',sans-serif;overflow:hidden}
+    body{background:#0d3826;font-family:'Lato',sans-serif}
     input,textarea,select{font-family:'Lato',sans-serif}
-    input::placeholder,textarea::placeholder{color:rgba(245,236,215,0.35)}
+    input::placeholder{color:rgba(245,236,215,0.35)}
     ::-webkit-scrollbar{width:4px}
     ::-webkit-scrollbar-thumb{background:#c9a84c44;border-radius:4px}
     @keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
-    @keyframes fadeUp{from{opacity:0;transform:translateY(30px)}to{opacity:1;transform:translateY(0)}}
+    @keyframes fadeUp{from{opacity:0;transform:translateY(28px)}to{opacity:1;transform:translateY(0)}}
     @keyframes flash{0%,100%{transform:scale(1)}50%{transform:scale(1.07)}}
-    @keyframes slideIn{from{transform:translateX(100%);opacity:0}to{transform:translateX(0);opacity:1}}
-    @keyframes glow{0%,100%{box-shadow:0 0 10px #c9a84c33}50%{box-shadow:0 0 24px #c9a84c77}}
+    @keyframes pulse{0%,100%{opacity:.7}50%{opacity:1}}
+    @keyframes glow{0%,100%{box-shadow:0 0 8px #c9a84c33}50%{box-shadow:0 0 22px #c9a84c66}}
   </style>
 </head>
 <body>
 <div id="root"></div>
 <script type="text/babel">
-const {useState,useRef,useEffect} = React;
+const {useState,useEffect,useRef,useCallback}=React;
 
+/* ─── CONSTANTES ─── */
 const G={dark:"#0d3826",green:"#1a5c3a",gold:"#c9a84c",goldL:"#e8c97a",cream:"#f5ecd7",red:"#e87a7a"};
-const POINTS_MAP={1:50,2:40,3:30,4:20,5:10};
-const BLUR_MAP={0:"blur(28px) brightness(0.45)",1:"blur(22px) brightness(0.55)",2:"blur(15px) brightness(0.65)",3:"blur(9px) brightness(0.75)",4:"blur(3px) brightness(0.9)",5:"blur(0px) brightness(1)"};
-const COLORS=["#e8c97a","#7ecba1","#e87a7a","#87c8e8","#c87ae8","#f0a070","#a0d080","#80b8f0","#f08090","#b0d870"];
+const POINTS={1:50,2:40,3:30,4:20,5:10};
+const BLUR={0:"blur(28px) brightness(0.4)",1:"blur(22px) brightness(0.52)",2:"blur(15px) brightness(0.63)",3:"blur(9px) brightness(0.75)",4:"blur(3px) brightness(0.88)",5:"blur(0px) brightness(1)"};
+const COLORS=["#e8c97a","#7ecba1","#e87a7a","#87c8e8","#c87ae8","#f0a070","#a0cf80","#80b8f0","#f08090","#c0e060"];
+const STORAGE_KEY="rebus_chogan_state";
 
 const DEFAULT_Q=[
-  {id:1,categorie:"PARFUMERIE",indices:["Je suis une fragrance classée « Extrait de Parfum ».","Ma composition contient 0% d'eau ajoutée.","Je possède une concentration de 30% d'essence de parfum.","Mon flacon est sobre, élégant et identifié par un numéro.","Je suis une création inspirée d'une grande marque mondiale, sans fixateur chimique."],reponse:"Parfum Chogan (Traditionnel ou Luxury)",image:"",imageUrl:""},
-  {id:2,categorie:"SOINS VISAGE",indices:["Je suis un soin cosmétique naturel de la gamme Aurodhea.","Je suis efficace contre les taches cutanées et les cicatrices.","Ma formule est riche en collagène, élastine et acide glycolique.","Je suis l'allié numéro 1 contre le vieillissement prématuré.","Mon ingrédient principal est extrait d'un petit animal à coquille."],reponse:"Crème à la bave d'escargot",image:"",imageUrl:""},
-  {id:3,categorie:"HYGIÈNE",indices:["Je suis un produit de la routine d'hygiène quotidienne.","Je n'utilise aucun agent de blanchiment chimique agressif.","J'élimine les taches de café et de nicotine en douceur.","Ma couleur est surprenante et totalement opposée au blanc habituel.","Je tire mes bienfaits purifiants du charbon actif."],reponse:"Dentifrice Black Power",image:"",imageUrl:""},
-  {id:4,categorie:"ENTRETIEN",indices:["Je fais partie de la gamme de nettoyage écologique et puissante.","Je suis efficace sur bois, acier, textile et même moteurs.","Je suis la solution radicale contre les graisses les plus tenaces.","Ma formule est hautement concentrée pour une utilisation professionnelle.","On m'appelle le « Degreaser Plus »."],reponse:"Dégraissant Chogan Plus",image:"",imageUrl:""},
-  {id:5,categorie:"BIEN-ÊTRE",indices:["Allié quotidien pour booster l'organisme de l'intérieur.","Utilisé lors des cures de changement de saison.","Je purifie le sang et aide à la détoxification du foie.","Ma saveur est naturellement amère mais mes bienfaits sont immenses.","Je suis le jus de plante le plus célèbre, souvent consommé pur ou dilué."],reponse:"Jus d'Aloe Vera à boire",image:"",imageUrl:""},
-  {id:6,categorie:"HUILES ESSENTIELLES",indices:["Extrait liquide hautement concentré et 100% pur.","Peut être diffusé dans l'air ou mélangé à une huile végétale.","Je suis connue pour mes propriétés relaxantes.","Mon odeur rappelle les champs du sud de la France.","Je suis l'huile essentielle de Lavande Officinale."],reponse:"Huile Essentielle de Lavande",image:"",imageUrl:""},
+  {id:1,categorie:"PARFUMERIE",indices:["Je suis une fragrance classée « Extrait de Parfum ».","Ma composition contient 0% d'eau ajoutée.","Je possède une concentration de 30% d'essence de parfum.","Mon flacon est sobre, élégant et identifié par un numéro.","Je suis une création inspirée d'une grande marque mondiale, sans fixateur chimique."],reponse:"Parfum Chogan (Traditionnel ou Luxury)",image:""},
+  {id:2,categorie:"SOINS VISAGE",indices:["Je suis un soin cosmétique naturel de la gamme Aurodhea.","Je suis efficace contre les taches cutanées et les cicatrices.","Ma formule est riche en collagène, élastine et acide glycolique.","Je suis l'allié numéro 1 contre le vieillissement prématuré.","Mon ingrédient principal est extrait d'un petit animal à coquille."],reponse:"Crème à la bave d'escargot",image:""},
+  {id:3,categorie:"HYGIÈNE",indices:["Je suis un produit de la routine d'hygiène quotidienne.","Je n'utilise aucun agent de blanchiment chimique agressif.","J'élimine les taches de café et de nicotine en douceur.","Ma couleur est surprenante et totalement opposée au blanc habituel.","Je tire mes bienfaits purifiants du charbon actif."],reponse:"Dentifrice Black Power",image:""},
+  {id:4,categorie:"ENTRETIEN",indices:["Je fais partie de la gamme de nettoyage écologique et puissante.","Je suis efficace sur bois, acier, textile et même moteurs.","Je suis la solution radicale contre les graisses les plus tenaces.","Ma formule est hautement concentrée pour une utilisation professionnelle.","On m'appelle le « Degreaser Plus »."],reponse:"Dégraissant Chogan Plus",image:""},
+  {id:5,categorie:"BIEN-ÊTRE",indices:["Allié quotidien pour booster l'organisme de l'intérieur.","Utilisé lors des cures de changement de saison.","Je purifie le sang et aide à la détoxification du foie.","Ma saveur est naturellement amère mais mes bienfaits sont immenses.","Je suis le jus de plante le plus célèbre, souvent consommé pur ou dilué."],reponse:"Jus d'Aloe Vera à boire",image:""},
+  {id:6,categorie:"HUILES ESSENTIELLES",indices:["Extrait liquide hautement concentré et 100% pur.","Peut être diffusé dans l'air ou mélangé à une huile végétale.","Je suis connue pour mes propriétés relaxantes.","Mon odeur rappelle les champs du sud de la France.","Je suis l'huile essentielle de Lavande Officinale."],reponse:"Huile Essentielle de Lavande",image:""},
 ];
 
 const inp=(e={})=>({background:"rgba(255,255,255,0.07)",border:`1px solid ${G.gold}44`,borderRadius:8,padding:"8px 11px",color:G.cream,outline:"none",width:"100%",fontSize:13,...e});
-const btn=(p=true,e={})=>({padding:"9px 18px",borderRadius:8,border:"none",cursor:"pointer",fontFamily:"inherit",fontWeight:700,background:p?`linear-gradient(135deg,${G.gold},${G.goldL})`:"rgba(255,255,255,0.08)",color:p?G.dark:G.cream,fontSize:13,transition:"all 0.2s",...e});
+const Btn=(p=true,e={})=>({padding:"9px 18px",borderRadius:8,border:"none",cursor:"pointer",fontFamily:"inherit",fontWeight:700,background:p?`linear-gradient(135deg,${G.gold},${G.goldL})`:"rgba(255,255,255,0.08)",color:p?G.dark:G.cream,fontSize:13,transition:"all 0.2s",...e});
 
-const Logo=()=>(
+/* ─── INITIAL GAME STATE ─── */
+const makeState=(cons,qs)=>({
+  phase:"play",       // play | validate | final
+  idx:0,
+  hintShown:0,
+  results:{},         // idx -> {cid,pts} | {skipped:true}
+  revealed:[],
+  consultants:cons.map(c=>({...c,score:0})),
+  questions:qs,
+  flash:null,
+});
+
+/* ─── STORAGE SYNC ─── */
+function saveState(s){ try{localStorage.setItem(STORAGE_KEY,JSON.stringify(s));}catch(e){} }
+function loadState(){ try{const r=localStorage.getItem(STORAGE_KEY);return r?JSON.parse(r):null;}catch(e){return null;} }
+
+/* ══════════════════════════════════════
+   LOGO
+══════════════════════════════════════ */
+const Logo=({size=22})=>(
   <div style={{display:"flex",alignItems:"center",gap:10}}>
-    <div style={{width:40,height:40,background:`linear-gradient(135deg,${G.gold},${G.goldL})`,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,color:G.dark,fontWeight:900}}>✿</div>
+    <div style={{width:38,height:38,background:`linear-gradient(135deg,${G.gold},${G.goldL})`,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,color:G.dark,fontWeight:900}}>✿</div>
     <div>
-      <div style={{fontFamily:"'Playfair Display',serif",fontSize:22,fontWeight:700,letterSpacing:4,color:G.gold,lineHeight:1}}>CHOGAN</div>
+      <div style={{fontFamily:"'Playfair Display',serif",fontSize:size,fontWeight:700,letterSpacing:4,color:G.gold,lineHeight:1}}>CHOGAN</div>
       <div style={{fontSize:9,color:`${G.gold}77`,letterSpacing:3}}>LIMITLESS TEAM</div>
     </div>
   </div>
 );
 
-// ══════════════════════════════════════
-// SETUP SCREEN
-// ══════════════════════════════════════
+/* ══════════════════════════════════════
+   SETUP SCREEN
+══════════════════════════════════════ */
 function Setup({onStart}){
   const [cons,setCons]=useState([{id:1,name:"Marie",color:COLORS[0]},{id:2,name:"Sophie",color:COLORS[1]},{id:3,name:"Léa",color:COLORS[2]}]);
   const [qs,setQs]=useState(DEFAULT_Q);
@@ -66,15 +87,15 @@ function Setup({onStart}){
   const fileRefs=useRef({});
 
   const addC=()=>{if(!name.trim())return;setCons(p=>[...p,{id:Date.now(),name:name.trim(),color:COLORS[p.length%COLORS.length]}]);setName("");};
-  const addQ=()=>{const id=Date.now();setQs(p=>[...p,{id,categorie:"",indices:["","","","",""],reponse:"",image:"",imageUrl:""}]);setEditQ(id);};
+  const addQ=()=>{const id=Date.now();setQs(p=>[...p,{id,categorie:"",indices:["","","","",""],reponse:"",image:""}]);setEditQ(id);};
   const handleImg=(qid,e)=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=ev=>setQs(p=>p.map(q=>q.id===qid?{...q,image:ev.target.result}:q));r.readAsDataURL(f);};
   const upInd=(qid,i,v)=>setQs(p=>p.map(q=>q.id===qid?{...q,indices:q.indices.map((x,j)=>j===i?v:x)}:q));
-
   const tabS=(t)=>({flex:1,padding:"13px 6px",border:"none",cursor:"pointer",fontFamily:"inherit",fontSize:11,fontWeight:700,letterSpacing:2,textTransform:"uppercase",background:tab===t?`${G.gold}18`:"transparent",color:tab===t?G.gold:`${G.cream}55`,borderBottom:tab===t?`2px solid ${G.gold}`:"2px solid transparent"});
 
   return(
     <div style={{minHeight:"100vh",background:`linear-gradient(160deg,${G.dark},#071a10)`,display:"flex",flexDirection:"column",alignItems:"center",padding:"28px 16px",overflowY:"auto"}}>
-      <div style={{marginBottom:24,textAlign:"center"}}><Logo/>
+      <div style={{marginBottom:24,textAlign:"center"}}>
+        <Logo size={26}/>
         <h1 style={{color:G.cream,fontFamily:"'Playfair Display',serif",fontSize:30,margin:"12px 0 4px",letterSpacing:6}}>RÉBUS</h1>
         <p style={{color:`${G.gold}88`,fontSize:11,letterSpacing:3}}>CONFIGURATION — FORMATRICE NADA</p>
       </div>
@@ -84,13 +105,13 @@ function Setup({onStart}){
           <button style={tabS("c")} onClick={()=>setTab("c")}>👥 Participants ({cons.length})</button>
           <button style={tabS("q")} onClick={()=>setTab("q")}>📋 Questions ({qs.length})</button>
         </div>
-
         <div style={{padding:18,maxHeight:460,overflowY:"auto"}}>
+
           {tab==="c"&&(
             <div>
               <div style={{display:"flex",gap:8,marginBottom:14}}>
                 <input value={name} onChange={e=>setName(e.target.value)} onKeyDown={e=>e.key==="Enter"&&addC()} placeholder="Nom du participant..." style={inp()}/>
-                <button onClick={addC} style={btn(true,{whiteSpace:"nowrap",padding:"8px 14px"})}>+ Ajouter</button>
+                <button onClick={addC} style={Btn(true,{whiteSpace:"nowrap",padding:"8px 14px"})}>+ Ajouter</button>
               </div>
               <div style={{display:"grid",gap:7}}>
                 {cons.map(c=>(
@@ -112,23 +133,20 @@ function Setup({onStart}){
               {qs.map((q,i)=>(
                 <div key={q.id} style={{background:"rgba(255,255,255,0.04)",borderRadius:11,padding:13,marginBottom:10,border:`1px solid ${editQ===q.id?G.gold+"55":G.gold+"18"}`}}>
                   <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:editQ===q.id?12:0}}>
-                    <div>
-                      <span style={{color:G.gold,fontWeight:700,fontSize:11,letterSpacing:2}}>Q{i+1}</span>
-                      <span style={{color:`${G.cream}55`,fontSize:11,marginLeft:8}}>{q.reponse||"Sans réponse"}</span>
-                    </div>
+                    <div><span style={{color:G.gold,fontWeight:700,fontSize:11,letterSpacing:2}}>Q{i+1}</span><span style={{color:`${G.cream}55`,fontSize:11,marginLeft:8}}>{q.reponse||"—"}</span></div>
                     <div style={{display:"flex",gap:5}}>
-                      <button onClick={()=>setEditQ(editQ===q.id?null:q.id)} style={btn(false,{padding:"4px 9px",fontSize:10})}>{editQ===q.id?"▲":"✏"}</button>
+                      <button onClick={()=>setEditQ(editQ===q.id?null:q.id)} style={Btn(false,{padding:"4px 9px",fontSize:10})}>{editQ===q.id?"▲":"✏"}</button>
                       <button onClick={()=>setQs(p=>p.filter(x=>x.id!==q.id))} style={{background:"rgba(255,80,80,0.12)",border:"none",color:G.red,cursor:"pointer",borderRadius:6,padding:"4px 7px",fontSize:11}}>✕</button>
                     </div>
                   </div>
                   {editQ===q.id&&(
                     <div style={{display:"grid",gap:9,animation:"fadeIn 0.2s ease"}}>
                       <div>
-                        <label style={{color:`${G.gold}77`,fontSize:10,letterSpacing:1,display:"block",marginBottom:3}}>CATÉGORIE (usage interne uniquement)</label>
-                        <input value={q.categorie} onChange={e=>setQs(p=>p.map(x=>x.id===q.id?{...x,categorie:e.target.value}:x))} placeholder="ex: PARFUMERIE (non visible par les participants)" style={inp()}/>
+                        <label style={{color:`${G.gold}77`,fontSize:10,letterSpacing:1,display:"block",marginBottom:3}}>CATÉGORIE (privé — non visible par les participants)</label>
+                        <input value={q.categorie} onChange={e=>setQs(p=>p.map(x=>x.id===q.id?{...x,categorie:e.target.value}:x))} placeholder="ex: PARFUMERIE" style={inp()}/>
                       </div>
                       <div>
-                        <label style={{color:`${G.gold}77`,fontSize:10,letterSpacing:1,display:"block",marginBottom:6}}>5 INDICES (script de lecture)</label>
+                        <label style={{color:`${G.gold}77`,fontSize:10,letterSpacing:1,display:"block",marginBottom:6}}>5 INDICES (script Nada)</label>
                         {q.indices.map((ind,j)=>(
                           <div key={j} style={{display:"flex",gap:6,marginBottom:5,alignItems:"center"}}>
                             <div style={{width:20,height:20,borderRadius:"50%",background:`${G.gold}22`,border:`1px solid ${G.gold}44`,display:"flex",alignItems:"center",justifyContent:"center",color:G.gold,fontSize:9,fontWeight:700,flexShrink:0}}>{j+1}</div>
@@ -142,29 +160,24 @@ function Setup({onStart}){
                       </div>
                       <div>
                         <label style={{color:`${G.gold}77`,fontSize:10,letterSpacing:1,display:"block",marginBottom:5}}>IMAGE PRODUIT</label>
-                        <div style={{display:"flex",gap:7,alignItems:"center",flexWrap:"wrap"}}>
-                          <input ref={el=>fileRefs.current[q.id]=el} type="file" accept="image/*" onChange={e=>handleImg(q.id,e)} style={{display:"none"}}/>
-                          <button onClick={()=>fileRefs.current[q.id]?.click()} style={btn(false,{padding:"6px 12px",fontSize:11})}>📷 Upload</button>
-                          <span style={{color:`${G.cream}44`,fontSize:10}}>ou</span>
-                          <input value={q.imageUrl||""} onChange={e=>setQs(p=>p.map(x=>x.id===q.id?{...x,imageUrl:e.target.value}:x))} placeholder="URL de l'image..." style={{...inp(),flex:1,fontSize:11}}/>
-                        </div>
-                        {(q.image||q.imageUrl)&&<div style={{marginTop:7,borderRadius:7,overflow:"hidden",height:70,background:"rgba(0,0,0,0.3)",display:"flex",alignItems:"center",justifyContent:"center"}}>
-                          <img src={q.image||q.imageUrl} style={{maxHeight:70,maxWidth:"100%",objectFit:"contain"}} alt="ap" onError={e=>e.target.style.display="none"}/>
+                        <input ref={el=>fileRefs.current[q.id]=el} type="file" accept="image/*" onChange={e=>handleImg(q.id,e)} style={{display:"none"}}/>
+                        <button onClick={()=>fileRefs.current[q.id]?.click()} style={Btn(false,{padding:"7px 12px",fontSize:11})}>📷 Choisir une image</button>
+                        {q.image&&<div style={{marginTop:7,borderRadius:7,overflow:"hidden",height:70,background:"rgba(0,0,0,0.3)",display:"flex",alignItems:"center",justifyContent:"center"}}>
+                          <img src={q.image} style={{maxHeight:70,maxWidth:"100%",objectFit:"contain"}} alt="ap"/>
                         </div>}
                       </div>
                     </div>
                   )}
                 </div>
               ))}
-              <button onClick={addQ} style={btn(false,{width:"100%",padding:"11px"})}>+ Nouvelle question</button>
+              <button onClick={addQ} style={Btn(false,{width:"100%",padding:"11px"})}>+ Nouvelle question</button>
             </div>
           )}
         </div>
-
         <div style={{padding:"14px 18px",borderTop:`1px solid ${G.gold}22`,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
           <span style={{color:`${G.cream}33`,fontSize:11}}>{cons.length} participant(s) · {qs.length} question(s)</span>
           <button onClick={()=>onStart(cons,qs)} disabled={cons.length===0||qs.length===0}
-            style={btn(true,{padding:"12px 32px",fontSize:13,letterSpacing:3,textTransform:"uppercase",opacity:cons.length===0||qs.length===0?.4:1})}>
+            style={Btn(true,{padding:"12px 32px",fontSize:13,letterSpacing:3,textTransform:"uppercase",opacity:cons.length===0||qs.length===0?.4:1})}>
             🎮 LANCER LE JEU
           </button>
         </div>
@@ -173,300 +186,149 @@ function Setup({onStart}){
   );
 }
 
-// ══════════════════════════════════════
-// GAME SCREEN — ECRAN PUBLIC + PANNEAU NADA
-// ══════════════════════════════════════
-function Game({consultants:initC,questions,onReset}){
-  const [cons,setCons]=useState(initC.map(c=>({...c,score:0})));
-  const [idx,setIdx]=useState(0);
-  const [hintShown,setHintShown]=useState(0);
-  const [results,setResults]=useState({});
-  const [revealed,setRevealed]=useState([]);
-  const [phase,setPhase]=useState("play"); // play | validate | final
-  const [selC,setSelC]=useState(null);
-  const [flash,setFlash]=useState(null);
-  const [panelOpen,setPanelOpen]=useState(false);
-  const [imgOverride,setImgOverride]=useState({});
-  const fileRef=useRef();
-  const panelRef=useRef();
+/* ══════════════════════════════════════
+   ÉCRAN PUBLIC — partagé sur Zoom
+══════════════════════════════════════ */
+function PublicScreen(){
+  const [gs,setGs]=useState(null);
 
-  const q=questions[idx];
-  const isLast=idx===questions.length-1;
-  const imgSrc=imgOverride[q.id]||q.image||q.imageUrl||"";
-  const blurFilter=phase==="validate"?BLUR_MAP[5]:BLUR_MAP[hintShown];
-  const currentPts=POINTS_MAP[Math.max(1,hintShown)]||10;
+  useEffect(()=>{
+    const sync=()=>{const s=loadState();if(s)setGs(s);};
+    sync();
+    window.addEventListener("storage",sync);
+    const t=setInterval(sync,300);
+    return()=>{window.removeEventListener("storage",sync);clearInterval(t);};
+  },[]);
 
-  const revealHint=()=>{if(hintShown<q.indices.length)setHintShown(h=>h+1);};
+  if(!gs) return(
+    <div style={{height:"100vh",background:`linear-gradient(160deg,${G.dark},#071a10)`,display:"flex",alignItems:"center",justifyContent:"center",flexDirection:"column",gap:20}}>
+      <Logo size={28}/>
+      <div style={{color:`${G.cream}55`,fontSize:14,letterSpacing:3,textAlign:"center"}}>
+        <div style={{animation:"pulse 1.5s infinite"}}>En attente du démarrage…</div>
+        <div style={{fontSize:11,marginTop:8,color:`${G.cream}33`}}>La formatrice démarre le jeu depuis son onglet</div>
+      </div>
+    </div>
+  );
 
-  const award=(cid)=>{
-    const pts=currentPts;
-    setCons(p=>p.map(c=>c.id===cid?{...c,score:c.score+pts}:c));
-    setFlash(cid);setTimeout(()=>setFlash(null),1200);
-    setResults(p=>({...p,[idx]:{cid,pts}}));
-    setRevealed(p=>[...p,idx]);
-    setPhase("validate");
-  };
+  if(gs.phase==="final") return <FinalPublic gs={gs}/>;
 
-  const skip=()=>{setResults(p=>({...p,[idx]:{skipped:true}}));setRevealed(p=>[...p,idx]);setPhase("validate");};
+  const q=gs.questions[gs.idx];
+  const imgSrc=q?.image||"";
+  const blurFilter=gs.phase==="validate"?BLUR[5]:BLUR[gs.hintShown];
+  const currentPts=POINTS[Math.max(1,gs.hintShown)]||10;
+  const res=gs.results[gs.idx];
+  const cons=gs.consultants;
 
-  const next=()=>{
-    if(isLast){setPhase("final");return;}
-    setIdx(i=>i+1);setHintShown(0);setSelC(null);setPhase("play");
-  };
-
-  const handleImg=(e)=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=ev=>setImgOverride(p=>({...p,[q.id]:ev.target.result}));r.readAsDataURL(f);};
-
-  if(phase==="final") return <Final consultants={[...cons].sort((a,b)=>b.score-a.score)} onReset={onReset}/>;
-
-  // ── ÉCRAN PUBLIC (ce que voient les participants) ──
   return(
-    <div style={{height:"100vh",background:`linear-gradient(160deg,${G.dark} 0%,#071a10 100%)`,display:"flex",flexDirection:"column",position:"relative",overflow:"hidden"}}>
-
-      {/* HEADER PUBLIC */}
+    <div style={{height:"100vh",background:`linear-gradient(160deg,${G.dark},#071a10)`,display:"flex",flexDirection:"column",overflow:"hidden"}}>
+      {/* Header */}
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"14px 32px",borderBottom:`1px solid ${G.gold}22`,background:"rgba(0,0,0,0.3)",flexShrink:0}}>
-        <Logo/>
-        <h1 style={{fontFamily:"'Playfair Display',serif",fontSize:36,color:G.gold,letterSpacing:10,textShadow:`0 0 30px ${G.gold}55`}}>RÉBUS</h1>
-        <div style={{color:`${G.gold}66`,fontSize:13,textAlign:"right"}}>
-          <div style={{fontSize:11,letterSpacing:2,marginBottom:2}}>QUESTION</div>
-          <div style={{fontFamily:"'Playfair Display',serif",fontSize:22,color:G.gold}}>{idx+1}<span style={{fontSize:14,color:`${G.gold}66`}}>/{questions.length}</span></div>
+        <Logo size={20}/>
+        <h1 style={{fontFamily:"'Playfair Display',serif",fontSize:34,color:G.gold,letterSpacing:10,textShadow:`0 0 30px ${G.gold}44`}}>RÉBUS</h1>
+        <div style={{textAlign:"right"}}>
+          <div style={{color:`${G.gold}66`,fontSize:10,letterSpacing:2}}>QUESTION</div>
+          <div style={{fontFamily:"'Playfair Display',serif",fontSize:22,color:G.gold,fontWeight:900}}>{gs.idx+1}<span style={{fontSize:13,color:`${G.gold}55`}}>/{gs.questions.length}</span></div>
         </div>
       </div>
 
-      {/* CORPS PUBLIC */}
-      <div style={{flex:1,display:"flex",gap:0,overflow:"hidden"}}>
-
-        {/* COLONNE GAUCHE — Scores publics */}
-        <div style={{width:200,padding:"16px 12px",borderRight:`1px solid ${G.gold}18`,display:"flex",flexDirection:"column",gap:8,overflowY:"auto",flexShrink:0}}>
-          <div style={{color:`${G.gold}77`,fontSize:9,letterSpacing:3,textTransform:"uppercase",marginBottom:4,textAlign:"center"}}>CLASSEMENT</div>
+      <div style={{flex:1,display:"flex",overflow:"hidden"}}>
+        {/* Scores gauche */}
+        <div style={{width:195,padding:"14px 10px",borderRight:`1px solid ${G.gold}18`,display:"flex",flexDirection:"column",gap:7,overflowY:"auto",flexShrink:0}}>
+          <div style={{color:`${G.gold}66`,fontSize:9,letterSpacing:3,textTransform:"uppercase",textAlign:"center",marginBottom:4}}>CLASSEMENT</div>
           {[...cons].sort((a,b)=>b.score-a.score).map((c,i)=>(
-            <div key={c.id} style={{padding:"11px 12px",borderRadius:11,background:flash===c.id?`${c.color}28`:"rgba(255,255,255,0.04)",border:`1px solid ${i===0&&c.score>0?c.color+"55":G.gold+"15"}`,animation:flash===c.id?"flash 1s ease":"none",transition:"background 0.4s"}}>
+            <div key={c.id} style={{padding:"10px 11px",borderRadius:10,background:gs.flash===c.id?`${c.color}25`:"rgba(255,255,255,0.04)",border:`1px solid ${i===0&&c.score>0?c.color+"55":G.gold+"15"}`,animation:gs.flash===c.id?"flash 1s ease":"none",transition:"background 0.4s"}}>
               <div style={{display:"flex",alignItems:"center",gap:7}}>
-                <span style={{fontSize:16,flexShrink:0}}>{i===0&&c.score>0?"👑":i===1?"🥈":i===2?"🥉":"·"}</span>
+                <span style={{fontSize:15}}>{i===0&&c.score>0?"👑":i===1?"🥈":i===2?"🥉":"·"}</span>
                 <div style={{flex:1,minWidth:0}}>
                   <div style={{color:c.color,fontWeight:700,fontSize:13,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{c.name}</div>
                 </div>
-                <div style={{color:G.gold,fontFamily:"'Playfair Display',serif",fontSize:20,fontWeight:900}}>{c.score}</div>
+                <div style={{color:G.gold,fontFamily:"'Playfair Display',serif",fontSize:19,fontWeight:900}}>{c.score}</div>
               </div>
-              <div style={{marginTop:6,height:3,background:"rgba(255,255,255,0.07)",borderRadius:2}}>
-                <div style={{height:"100%",borderRadius:2,width:`${Math.max(4,(c.score/Math.max(1,...cons.map(x=>x.score)))*100)}%`,background:c.color,transition:"width 0.6s ease"}}/>
+              <div style={{marginTop:5,height:3,background:"rgba(255,255,255,0.07)",borderRadius:2}}>
+                <div style={{height:"100%",borderRadius:2,width:`${Math.max(4,(c.score/Math.max(1,...cons.map(x=>x.score)))*100)}%`,background:c.color,transition:"width 0.7s ease"}}/>
               </div>
             </div>
           ))}
-          {/* Barème visible */}
+          {/* Barème */}
           <div style={{marginTop:"auto",padding:"10px 11px",borderRadius:9,background:"rgba(0,0,0,0.2)",border:`1px solid ${G.gold}15`}}>
-            <div style={{color:`${G.gold}77`,fontSize:9,letterSpacing:2,marginBottom:6,textAlign:"center"}}>BARÈME</div>
-            {Object.entries(POINTS_MAP).map(([k,v])=>(
+            <div style={{color:`${G.gold}66`,fontSize:9,letterSpacing:2,marginBottom:6,textAlign:"center"}}>BARÈME</div>
+            {Object.entries(POINTS).map(([k,v])=>(
               <div key={k} style={{display:"flex",justifyContent:"space-between",marginBottom:3}}>
                 <span style={{color:`${G.cream}44`,fontSize:10}}>Indice {k}</span>
-                <span style={{color:hintShown===Number(k)?G.gold:`${G.gold}55`,fontWeight:hintShown===Number(k)?900:400,fontSize:10}}>{v} pts</span>
+                <span style={{color:gs.hintShown===Number(k)?G.gold:`${G.gold}44`,fontWeight:gs.hintShown===Number(k)?900:400,fontSize:10}}>{v} pts</span>
               </div>
             ))}
           </div>
         </div>
 
-        {/* CENTRE — Zone principale (ce que voient les participants) */}
-        <div style={{flex:1,display:"flex",flexDirection:"column",padding:"20px 24px",gap:16,overflowY:"auto"}}>
-
-          {/* Image produit */}
-          <div style={{flex:1,background:"rgba(0,0,0,0.25)",borderRadius:18,border:`1px solid ${G.gold}18`,display:"flex",alignItems:"center",justifyContent:"center",position:"relative",overflow:"hidden",minHeight:240}}>
+        {/* Zone centrale */}
+        <div style={{flex:1,display:"flex",flexDirection:"column",padding:"18px 22px",gap:14,overflowY:"auto"}}>
+          {/* Image */}
+          <div style={{flex:1,background:"rgba(0,0,0,0.22)",borderRadius:18,border:`1px solid ${G.gold}18`,display:"flex",alignItems:"center",justifyContent:"center",position:"relative",overflow:"hidden",minHeight:220}}>
             {imgSrc?(
               <>
-                <img src={imgSrc} style={{maxHeight:"100%",maxWidth:"100%",objectFit:"contain",filter:blurFilter,transition:"filter 1.2s ease"}} alt="produit"/>
-                {/* Indicateur flou */}
+                <img src={imgSrc} style={{maxHeight:"100%",maxWidth:"100%",objectFit:"contain",filter:blurFilter,transition:"filter 1.3s ease"}} alt="produit"/>
                 <div style={{position:"absolute",top:12,left:12,display:"flex",gap:5}}>
                   {[1,2,3,4,5].map(n=>(
-                    <div key={n} style={{width:10,height:10,borderRadius:"50%",background:n<=hintShown?G.gold:"rgba(255,255,255,0.15)",boxShadow:n<=hintShown?`0 0 8px ${G.gold}`:undefined,transition:"all 0.3s"}}/>
+                    <div key={n} style={{width:10,height:10,borderRadius:"50%",background:n<=gs.hintShown?G.gold:"rgba(255,255,255,0.15)",boxShadow:n<=gs.hintShown?`0 0 8px ${G.gold}`:undefined,transition:"all 0.4s"}}/>
                   ))}
                 </div>
-                {/* Points en jeu */}
-                <div style={{position:"absolute",top:12,right:12,background:"rgba(0,0,0,0.6)",borderRadius:10,padding:"8px 14px",border:`1px solid ${G.gold}44`,textAlign:"center",animation:"glow 2s infinite"}}>
-                  <div style={{color:G.gold,fontFamily:"'Playfair Display',serif",fontSize:26,fontWeight:900,lineHeight:1}}>{hintShown>0?currentPts:"?"}</div>
-                  <div style={{color:`${G.gold}77`,fontSize:9,letterSpacing:2}}>POINTS</div>
-                </div>
+                {gs.hintShown>0&&gs.phase==="play"&&(
+                  <div style={{position:"absolute",top:12,right:12,background:"rgba(0,0,0,0.65)",borderRadius:10,padding:"8px 14px",border:`1px solid ${G.gold}44`,textAlign:"center",animation:"glow 2s infinite"}}>
+                    <div style={{color:G.gold,fontFamily:"'Playfair Display',serif",fontSize:26,fontWeight:900,lineHeight:1}}>{currentPts}</div>
+                    <div style={{color:`${G.gold}77`,fontSize:9,letterSpacing:2}}>POINTS</div>
+                  </div>
+                )}
               </>
             ):(
-              <div style={{textAlign:"center",opacity:.5}}>
+              <div style={{textAlign:"center",opacity:.4}}>
                 <div style={{fontSize:64,marginBottom:8}}>🧴</div>
-                <div style={{color:G.cream,fontSize:13}}>En attente de l'image…</div>
+                <div style={{color:G.cream,fontSize:13}}>Image à venir…</div>
               </div>
             )}
           </div>
 
           {/* Indices révélés — SANS catégorie */}
-          {hintShown>0&&(
+          {gs.hintShown===0&&gs.phase==="play"&&(
+            <div style={{textAlign:"center",padding:12}}>
+              <div style={{color:`${G.gold}44`,fontSize:14,letterSpacing:4,textTransform:"uppercase",animation:"pulse 2s infinite"}}>En attente du premier indice…</div>
+            </div>
+          )}
+          {gs.hintShown>0&&(
             <div style={{display:"flex",flexDirection:"column",gap:8}}>
-              {q.indices.slice(0,hintShown).map((ind,i)=>(
-                <div key={i} style={{display:"flex",gap:12,padding:"13px 16px",background:`${G.gold}0c`,borderRadius:11,border:`1px solid ${G.gold}22`,animation:i===hintShown-1?"fadeIn 0.4s ease":"none"}}>
+              {q.indices.slice(0,gs.hintShown).map((ind,i)=>(
+                <div key={i} style={{display:"flex",gap:12,padding:"13px 16px",background:`${G.gold}0d`,borderRadius:11,border:`1px solid ${G.gold}22`,animation:i===gs.hintShown-1?"fadeIn 0.5s ease":"none"}}>
                   <div style={{width:26,height:26,borderRadius:"50%",background:`linear-gradient(135deg,${G.gold},${G.goldL})`,display:"flex",alignItems:"center",justifyContent:"center",color:G.dark,fontWeight:900,fontSize:11,flexShrink:0}}>{i+1}</div>
-                  <div style={{color:G.cream,fontSize:15,lineHeight:1.5,fontWeight:i===hintShown-1?500:400}}>{ind}</div>
+                  <div style={{color:G.cream,fontSize:15,lineHeight:1.5}}>{ind}</div>
                 </div>
               ))}
             </div>
           )}
 
-          {hintShown===0&&(
-            <div style={{textAlign:"center",padding:"18px 0"}}>
-              <div style={{color:`${G.gold}55`,fontSize:14,letterSpacing:3,textTransform:"uppercase"}}>En attente du premier indice…</div>
-            </div>
-          )}
-
-          {/* Message validation */}
-          {phase==="validate"&&(
-            <div style={{padding:"14px 20px",borderRadius:11,background:results[idx]&&!results[idx].skipped?`${G.gold}14`:"rgba(255,80,80,0.08)",border:`1px solid ${results[idx]&&!results[idx].skipped?G.gold+"44":"rgba(255,80,80,0.25)"}`,textAlign:"center",animation:"fadeIn 0.4s ease"}}>
-              {results[idx]&&!results[idx].skipped?(
+          {/* Message résultat */}
+          {gs.phase==="validate"&&(
+            <div style={{padding:"14px 20px",borderRadius:11,background:res&&!res.skipped?`${G.gold}14`:"rgba(255,80,80,0.08)",border:`1px solid ${res&&!res.skipped?G.gold+"44":"rgba(255,80,80,0.25)"}`,textAlign:"center",animation:"fadeIn 0.4s ease"}}>
+              {res&&!res.skipped?(
                 <div style={{color:G.gold,fontFamily:"'Playfair Display',serif",fontSize:20,fontWeight:700}}>
-                  🎉 Bravo {cons.find(c=>c.id===results[idx].cid)?.name} ! +{results[idx].pts} points
+                  🎉 Bravo {cons.find(c=>c.id===res.cid)?.name} ! +{res.pts} points
                 </div>
               ):(
-                <div style={{color:`${G.cream}88`,fontSize:16}}>Réponse : <strong style={{color:G.cream}}>{q.reponse}</strong></div>
+                <div style={{color:`${G.cream}88`,fontSize:16}}>La réponse était : <strong style={{color:G.cream,fontFamily:"'Playfair Display',serif"}}>{q.reponse}</strong></div>
               )}
             </div>
           )}
         </div>
       </div>
-
-      {/* ════════════════════════════════════
-          BOUTON NADA — discret, coin bas droit
-      ════════════════════════════════════ */}
-      <button onClick={()=>setPanelOpen(o=>!o)}
-        style={{position:"fixed",bottom:20,right:20,width:52,height:52,borderRadius:"50%",border:`2px solid ${G.gold}55`,background:"rgba(13,56,38,0.95)",cursor:"pointer",fontSize:22,boxShadow:"0 4px 20px rgba(0,0,0,0.5)",zIndex:1000,transition:"all 0.2s",display:"flex",alignItems:"center",justifyContent:"center"}}>
-        {panelOpen?"✕":"🔐"}
-      </button>
-
-      {/* ════════════════════════════════════
-          PANNEAU FORMATRICE NADA (overlay)
-      ════════════════════════════════════ */}
-      {panelOpen&&(
-        <div ref={panelRef} style={{position:"fixed",top:0,right:0,bottom:0,width:380,background:`linear-gradient(180deg,#0a2010,#051508)`,borderLeft:`2px solid ${G.gold}44`,zIndex:999,display:"flex",flexDirection:"column",animation:"slideIn 0.3s ease",boxShadow:"-8px 0 40px rgba(0,0,0,0.7)"}}>
-
-          {/* Header panneau */}
-          <div style={{padding:"14px 16px",borderBottom:`1px solid ${G.gold}22`,background:"rgba(0,0,0,0.3)",flexShrink:0}}>
-            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-              <div>
-                <div style={{color:G.gold,fontWeight:700,fontSize:13,letterSpacing:2}}>🔐 PANNEAU NADA</div>
-                <div style={{color:`${G.cream}55`,fontSize:10,marginTop:2}}>Non visible par les participants</div>
-              </div>
-              <div style={{color:G.gold,fontSize:11,textAlign:"right"}}>
-                <div style={{color:`${G.cream}44`,fontSize:9,letterSpacing:1}}>QUESTION</div>
-                <div style={{fontFamily:"'Playfair Display',serif",fontSize:18,fontWeight:900}}>{idx+1}/{questions.length}</div>
-              </div>
-            </div>
-          </div>
-
-          <div style={{flex:1,overflowY:"auto",padding:14,display:"flex",flexDirection:"column",gap:12}}>
-
-            {/* Catégorie & réponse (privé) */}
-            <div style={{padding:"11px 14px",borderRadius:10,background:"rgba(255,255,255,0.04)",border:`1px solid ${G.gold}22`}}>
-              <div style={{color:`${G.gold}77`,fontSize:9,letterSpacing:2,marginBottom:5}}>CATÉGORIE (privé)</div>
-              <div style={{color:G.goldL,fontWeight:700,fontSize:13}}>{q.categorie||"—"}</div>
-              <div style={{height:1,background:`${G.gold}22`,margin:"8px 0"}}/>
-              <div style={{color:`${G.gold}77`,fontSize:9,letterSpacing:2,marginBottom:4}}>RÉPONSE CORRECTE</div>
-              <div style={{color:"#7ecba1",fontWeight:700,fontSize:15,fontFamily:"'Playfair Display',serif"}}>{q.reponse}</div>
-            </div>
-
-            {/* Script indices */}
-            <div style={{padding:"11px 14px",borderRadius:10,background:"rgba(255,255,255,0.04)",border:`1px solid ${G.gold}22`}}>
-              <div style={{color:`${G.gold}77`,fontSize:9,letterSpacing:2,marginBottom:8}}>SCRIPT — INDICES À LIRE</div>
-              {q.indices.map((ind,i)=>(
-                <div key={i} style={{display:"flex",gap:8,marginBottom:7,padding:"8px 10px",borderRadius:8,background:i<hintShown?`${G.gold}12`:i===hintShown?"rgba(255,255,255,0.05)":"rgba(0,0,0,0.2)",border:`1px solid ${i<hintShown?G.gold+"33":"transparent"}`,opacity:i>hintShown?.5:1}}>
-                  <div style={{width:20,height:20,borderRadius:"50%",background:i<hintShown?`${G.gold}`:"rgba(255,255,255,0.1)",display:"flex",alignItems:"center",justifyContent:"center",color:i<hintShown?G.dark:G.cream,fontWeight:900,fontSize:9,flexShrink:0}}>{i+1}</div>
-                  <div>
-                    <div style={{color:i<hintShown?G.cream:`${G.cream}77`,fontSize:12,lineHeight:1.4}}>{ind||"—"}</div>
-                    <div style={{color:`${G.gold}55`,fontSize:9,marginTop:2}}>{POINTS_MAP[i+1]} pts si réponse ici</div>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            {/* Navigation questions */}
-            <div style={{padding:"11px 14px",borderRadius:10,background:"rgba(255,255,255,0.04)",border:`1px solid ${G.gold}22`}}>
-              <div style={{color:`${G.gold}77`,fontSize:9,letterSpacing:2,marginBottom:8}}>NAVIGATION</div>
-              <div style={{display:"flex",flexWrap:"wrap",gap:5}}>
-                {questions.map((qu,i)=>(
-                  <button key={qu.id} onClick={()=>{setIdx(i);setHintShown(0);setSelC(null);setPhase(revealed.includes(i)?"validate":"play");}}
-                    style={{padding:"5px 10px",borderRadius:7,border:`1px solid ${i===idx?G.gold+"88":G.gold+"22"}`,background:i===idx?`${G.gold}22`:"rgba(255,255,255,0.04)",color:i===idx?G.gold:`${G.cream}55`,cursor:"pointer",fontSize:11,fontWeight:i===idx?700:400}}>
-                    {revealed.includes(i)?"✓":""} Q{i+1}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Contrôles */}
-            {phase==="play"&&(
-              <div style={{padding:"11px 14px",borderRadius:10,background:"rgba(255,255,255,0.04)",border:`1px solid ${G.gold}22`}}>
-                <div style={{color:`${G.gold}77`,fontSize:9,letterSpacing:2,marginBottom:10}}>CONTRÔLES</div>
-
-                {/* Sélection participant */}
-                <div style={{marginBottom:10}}>
-                  <div style={{color:`${G.cream}55`,fontSize:10,marginBottom:6}}>Qui a répondu ?</div>
-                  <div style={{display:"flex",flexWrap:"wrap",gap:5}}>
-                    {cons.map(c=>(
-                      <button key={c.id} onClick={()=>setSelC(c.id===selC?null:c.id)}
-                        style={{padding:"5px 12px",borderRadius:20,border:`2px solid ${c.id===selC?c.color:c.color+"44"}`,background:c.id===selC?c.color+"22":"transparent",color:c.id===selC?c.color:`${c.color}77`,cursor:"pointer",fontFamily:"inherit",fontSize:12,fontWeight:700}}>
-                        {c.name}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div style={{display:"grid",gap:7}}>
-                  {hintShown<q.indices.length&&(
-                    <button onClick={revealHint} style={btn(false,{width:"100%",padding:"10px",background:`${G.gold}14`,border:`1px solid ${G.gold}44`,color:G.gold,fontSize:12})}>
-                      💡 Révéler indice {hintShown+1} → {POINTS_MAP[hintShown+1]} pts
-                    </button>
-                  )}
-                  <button onClick={()=>selC&&award(selC)} disabled={!selC}
-                    style={btn(true,{width:"100%",padding:"10px",opacity:selC?1:.4,fontSize:12})}>
-                    ✓ Bonne réponse ({currentPts} pts)
-                  </button>
-                  <button onClick={skip}
-                    style={btn(false,{width:"100%",padding:"8px",background:"rgba(255,80,80,0.1)",border:"1px solid rgba(255,80,80,0.25)",color:G.red,fontSize:12})}>
-                    ✗ Passer cette question
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {phase==="validate"&&(
-              <div style={{display:"flex",flexDirection:"column",gap:8}}>
-                <div style={{padding:"11px 14px",borderRadius:10,background:"rgba(255,255,255,0.04)",border:`1px solid ${G.gold}22`,textAlign:"center"}}>
-                  {results[idx]&&!results[idx].skipped?(
-                    <div style={{color:G.gold,fontWeight:700,fontSize:13}}>✅ {cons.find(c=>c.id===results[idx].cid)?.name} · +{results[idx].pts} pts</div>
-                  ):(
-                    <div style={{color:`${G.cream}66`,fontSize:12}}>❌ Réponse : {q.reponse}</div>
-                  )}
-                </div>
-                <button onClick={next} style={btn(true,{width:"100%",padding:"12px",fontSize:13,letterSpacing:2,textTransform:"uppercase"})}>
-                  {isLast?"🏆 Résultats finaux":"Question suivante →"}
-                </button>
-              </div>
-            )}
-
-            {/* Upload image */}
-            <div style={{padding:"11px 14px",borderRadius:10,background:"rgba(255,255,255,0.04)",border:`1px solid ${G.gold}22`}}>
-              <div style={{color:`${G.gold}77`,fontSize:9,letterSpacing:2,marginBottom:8}}>IMAGE PRODUIT</div>
-              <input ref={fileRef} type="file" accept="image/*" onChange={handleImg} style={{display:"none"}}/>
-              <button onClick={()=>fileRef.current?.click()} style={btn(false,{width:"100%",padding:"8px",fontSize:11})}>📷 Changer l'image</button>
-            </div>
-
-            {/* Bouton config */}
-            <button onClick={onReset} style={btn(false,{width:"100%",padding:"8px",fontSize:11,marginTop:4})}>
-              ⚙ Revenir à la configuration
-            </button>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
 
-// ══════════════════════════════════════
-// FINAL SCREEN
-// ══════════════════════════════════════
-function Final({consultants,onReset}){
-  const w=consultants[0];
+/* ── Final public ── */
+function FinalPublic({gs}){
+  const cons=[...gs.consultants].sort((a,b)=>b.score-a.score);
+  const w=cons[0];
   return(
-    <div style={{minHeight:"100vh",background:`radial-gradient(ellipse at center,${G.green},${G.dark} 55%,#050f08)`,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:28,fontFamily:"'Lato',sans-serif"}}>
+    <div style={{minHeight:"100vh",background:`radial-gradient(ellipse at center,${G.green},${G.dark} 55%,#050f08)`,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:28}}>
       <div style={{textAlign:"center",marginBottom:32,animation:"fadeUp 0.8s ease"}}>
         <div style={{fontSize:64,marginBottom:10}}>🏆</div>
         <h1 style={{color:G.gold,fontFamily:"'Playfair Display',serif",fontSize:44,margin:"0 0 6px"}}>FIN DU JEU</h1>
@@ -481,8 +343,8 @@ function Final({consultants,onReset}){
           </div>
         </div>
       )}
-      <div style={{display:"flex",gap:10,flexWrap:"wrap",justifyContent:"center",marginBottom:36}}>
-        {consultants.map((c,i)=>(
+      <div style={{display:"flex",gap:12,flexWrap:"wrap",justifyContent:"center"}}>
+        {cons.map((c,i)=>(
           <div key={c.id} style={{padding:"16px 22px",borderRadius:12,background:i===0?`${c.color}14`:"rgba(255,255,255,0.04)",border:`1px solid ${i===0?c.color+"44":G.gold+"15"}`,textAlign:"center",minWidth:120,animation:`fadeUp 0.5s ease ${0.3+i*0.07}s both`}}>
             <div style={{fontSize:22,marginBottom:5}}>{i===0?"🥇":i===1?"🥈":i===2?"🥉":`${i+1}.`}</div>
             <div style={{color:c.color,fontWeight:700,fontSize:14,marginBottom:3}}>{c.name}</div>
@@ -491,23 +353,264 @@ function Final({consultants,onReset}){
           </div>
         ))}
       </div>
-      <button onClick={onReset} style={btn(true,{padding:"13px 36px",fontSize:14,letterSpacing:3,textTransform:"uppercase"})}>
-        🔄 NOUVELLE PARTIE
-      </button>
     </div>
   );
 }
 
-// ══════════════════════════════════════
-// APP ROOT
-// ══════════════════════════════════════
+/* ══════════════════════════════════════
+   PANNEAU NADA — onglet privé
+══════════════════════════════════════ */
+function NadaPanel(){
+  const [gs,setGs]=useState(null);
+
+  const sync=useCallback(()=>{const s=loadState();if(s)setGs(s);},[]);
+
+  useEffect(()=>{
+    sync();
+    window.addEventListener("storage",sync);
+    const t=setInterval(sync,200);
+    return()=>{window.removeEventListener("storage",sync);clearInterval(t);};
+  },[sync]);
+
+  const update=(patch)=>{
+    const next={...gs,...patch};
+    setGs(next);
+    saveState(next);
+  };
+
+  if(!gs) return(
+    <div style={{height:"100vh",background:"#050f08",display:"flex",alignItems:"center",justifyContent:"center",color:G.cream,flexDirection:"column",gap:12}}>
+      <div style={{fontSize:32}}>🔐</div>
+      <div style={{fontSize:14,color:`${G.cream}66`}}>En attente du démarrage du jeu…</div>
+    </div>
+  );
+
+  const q=gs.questions[gs.idx];
+  const isLast=gs.idx===gs.questions.length-1;
+  const currentPts=POINTS[Math.max(1,gs.hintShown)]||10;
+
+  const revealHint=()=>{
+    if(gs.hintShown>=q.indices.length) return;
+    update({hintShown:gs.hintShown+1});
+  };
+
+  const award=(cid)=>{
+    const pts=currentPts;
+    const newCons=gs.consultants.map(c=>c.id===cid?{...c,score:c.score+pts}:c);
+    const newResults={...gs.results,[gs.idx]:{cid,pts}};
+    const newRevealed=[...new Set([...gs.revealed,gs.idx])];
+    const next={...gs,consultants:newCons,results:newResults,revealed:newRevealed,phase:"validate",flash:cid};
+    setGs(next);saveState(next);
+    setTimeout(()=>{const s=loadState();if(s){const n={...s,flash:null};setGs(n);saveState(n);}},1200);
+  };
+
+  const skip=()=>{
+    const newResults={...gs.results,[gs.idx]:{skipped:true}};
+    const newRevealed=[...new Set([...gs.revealed,gs.idx])];
+    update({results:newResults,revealed:newRevealed,phase:"validate"});
+  };
+
+  const next=()=>{
+    if(isLast){update({phase:"final"});return;}
+    update({idx:gs.idx+1,hintShown:0,phase:"play",flash:null});
+  };
+
+  const goTo=(i)=>{
+    update({idx:i,hintShown:0,phase:gs.revealed.includes(i)?"validate":"play",flash:null});
+  };
+
+  const reset=()=>{localStorage.removeItem(STORAGE_KEY);setGs(null);};
+
+  const res=gs.results[gs.idx];
+  const cons=gs.consultants;
+
+  return(
+    <div style={{height:"100vh",background:"#050f08",display:"flex",flexDirection:"column",overflow:"hidden"}}>
+      {/* Header */}
+      <div style={{padding:"11px 16px",borderBottom:`1px solid ${G.gold}33`,background:"rgba(0,0,0,0.4)",display:"flex",alignItems:"center",justifyContent:"space-between",flexShrink:0}}>
+        <div>
+          <div style={{color:G.gold,fontWeight:700,fontSize:13,letterSpacing:2}}>🔐 PANNEAU NADA</div>
+          <div style={{color:`${G.cream}44`,fontSize:9,letterSpacing:1}}>Contrôles privés — non partagé sur Zoom</div>
+        </div>
+        <div style={{display:"flex",gap:8,alignItems:"center"}}>
+          <div style={{color:`${G.cream}55`,fontSize:11}}>Q{gs.idx+1}/{gs.questions.length}</div>
+          <button onClick={reset} style={Btn(false,{padding:"5px 10px",fontSize:10})}>⚙ Reconfigurer</button>
+        </div>
+      </div>
+
+      <div style={{flex:1,display:"flex",overflow:"hidden"}}>
+        {/* Navigation questions */}
+        <div style={{width:130,padding:10,borderRight:`1px solid ${G.gold}18`,overflowY:"auto",flexShrink:0}}>
+          <div style={{color:`${G.gold}66`,fontSize:9,letterSpacing:2,textTransform:"uppercase",marginBottom:8,textAlign:"center"}}>QUESTIONS</div>
+          {gs.questions.map((qu,i)=>(
+            <div key={qu.id} onClick={()=>goTo(i)}
+              style={{padding:"7px 9px",borderRadius:7,cursor:"pointer",marginBottom:5,background:i===gs.idx?`${G.gold}22`:"rgba(255,255,255,0.04)",border:`1px solid ${i===gs.idx?G.gold+"55":"transparent"}`,transition:"all 0.2s"}}>
+              <div style={{color:i===gs.idx?G.gold:G.cream,fontSize:10,fontWeight:700}}>{gs.revealed.includes(i)?"✓":""} Q{i+1}</div>
+              <div style={{color:`${G.cream}44`,fontSize:9,marginTop:2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{qu.reponse}</div>
+            </div>
+          ))}
+        </div>
+
+        {/* Contenu principal Nada */}
+        <div style={{flex:1,padding:14,overflowY:"auto",display:"flex",flexDirection:"column",gap:12}}>
+
+          {/* Catégorie + réponse */}
+          <div style={{padding:"12px 14px",borderRadius:10,background:"rgba(255,255,255,0.05)",border:`1px solid ${G.gold}33`}}>
+            <div style={{display:"flex",gap:16,flexWrap:"wrap"}}>
+              <div style={{flex:1}}>
+                <div style={{color:`${G.gold}66`,fontSize:9,letterSpacing:2,marginBottom:4}}>CATÉGORIE (privé)</div>
+                <div style={{color:G.goldL,fontWeight:700,fontSize:13}}>{q.categorie||"—"}</div>
+              </div>
+              <div style={{flex:1}}>
+                <div style={{color:`${G.gold}66`,fontSize:9,letterSpacing:2,marginBottom:4}}>RÉPONSE CORRECTE</div>
+                <div style={{color:"#7ecba1",fontWeight:700,fontSize:14,fontFamily:"'Playfair Display',serif"}}>{q.reponse}</div>
+              </div>
+            </div>
+          </div>
+
+          {/* Script indices */}
+          <div style={{padding:"12px 14px",borderRadius:10,background:"rgba(255,255,255,0.05)",border:`1px solid ${G.gold}22`}}>
+            <div style={{color:`${G.gold}66`,fontSize:9,letterSpacing:2,marginBottom:10}}>SCRIPT — INDICES À LIRE À VOIX HAUTE</div>
+            {q.indices.map((ind,i)=>(
+              <div key={i} style={{display:"flex",gap:9,marginBottom:7,padding:"9px 11px",borderRadius:8,background:i<gs.hintShown?`${G.gold}12`:i===gs.hintShown?"rgba(255,255,255,0.06)":"rgba(0,0,0,0.25)",border:`1px solid ${i<gs.hintShown?G.gold+"33":"transparent"}`,opacity:i>gs.hintShown?.45:1,transition:"all 0.3s"}}>
+                <div style={{width:20,height:20,borderRadius:"50%",background:i<gs.hintShown?G.gold:"rgba(255,255,255,0.1)",display:"flex",alignItems:"center",justifyContent:"center",color:i<gs.hintShown?G.dark:G.cream,fontWeight:900,fontSize:9,flexShrink:0}}>{i+1}</div>
+                <div style={{flex:1}}>
+                  <div style={{color:i<gs.hintShown?G.cream:i===gs.hintShown?G.goldL:`${G.cream}55`,fontSize:12,lineHeight:1.4}}>{ind||"—"}</div>
+                  <div style={{color:`${G.gold}44`,fontSize:9,marginTop:2}}>{POINTS[i+1]} pts</div>
+                </div>
+                {i<gs.hintShown&&<div style={{color:"#7ecba1",fontSize:10,alignSelf:"center"}}>✓ Lu</div>}
+                {i===gs.hintShown&&gs.phase==="play"&&<div style={{color:G.gold,fontSize:9,alignSelf:"center",animation:"pulse 1s infinite"}}>→ SUIVANT</div>}
+              </div>
+            ))}
+          </div>
+
+          {/* Contrôles */}
+          {gs.phase==="play"&&(
+            <div style={{padding:"12px 14px",borderRadius:10,background:"rgba(255,255,255,0.05)",border:`1px solid ${G.gold}22`}}>
+              <div style={{color:`${G.gold}66`,fontSize:9,letterSpacing:2,marginBottom:10}}>CONTRÔLES</div>
+
+              {/* Sélection participant */}
+              <div style={{marginBottom:10}}>
+                <div style={{color:`${G.cream}55`,fontSize:10,marginBottom:6}}>Qui a trouvé ?</div>
+                <div style={{display:"flex",flexWrap:"wrap",gap:5}}>
+                  {cons.map(c=>(
+                    <button key={c.id}
+                      onClick={()=>{
+                        // store selC in local state via gs hack
+                        update({_selC:c.id===gs._selC?null:c.id});
+                      }}
+                      style={{padding:"5px 12px",borderRadius:20,border:`2px solid ${c.id===gs._selC?c.color:c.color+"44"}`,background:c.id===gs._selC?c.color+"22":"transparent",color:c.id===gs._selC?c.color:`${c.color}77`,cursor:"pointer",fontFamily:"inherit",fontSize:12,fontWeight:700}}>
+                      {c.name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div style={{display:"grid",gap:8}}>
+                {gs.hintShown<q.indices.length&&(
+                  <button onClick={revealHint}
+                    style={Btn(false,{width:"100%",padding:"10px",background:`${G.gold}14`,border:`1px solid ${G.gold}44`,color:G.gold,fontSize:12})}>
+                    💡 Révéler indice {gs.hintShown+1} → {POINTS[gs.hintShown+1]} pts
+                  </button>
+                )}
+                <button onClick={()=>gs._selC&&award(gs._selC)} disabled={!gs._selC}
+                  style={Btn(true,{width:"100%",padding:"10px",opacity:gs._selC?1:.4,fontSize:12})}>
+                  ✓ Valider bonne réponse ({currentPts} pts)
+                </button>
+                <button onClick={skip}
+                  style={Btn(false,{width:"100%",padding:"9px",background:"rgba(255,80,80,0.1)",border:"1px solid rgba(255,80,80,0.3)",color:G.red,fontSize:12})}>
+                  ✗ Passer cette question
+                </button>
+              </div>
+              {gs.hintShown>0&&<div style={{textAlign:"center",marginTop:8,color:`${G.gold}55`,fontSize:10}}>{gs.hintShown} indice(s) · Valeur actuelle : <strong style={{color:G.gold}}>{currentPts} pts</strong></div>}
+            </div>
+          )}
+
+          {gs.phase==="validate"&&(
+            <div style={{display:"flex",flexDirection:"column",gap:8}}>
+              <div style={{padding:"11px 14px",borderRadius:10,background:"rgba(255,255,255,0.05)",border:`1px solid ${G.gold}22`,textAlign:"center"}}>
+                {res&&!res.skipped?(
+                  <div style={{color:G.gold,fontWeight:700,fontSize:13}}>✅ {cons.find(c=>c.id===res.cid)?.name} · +{res.pts} pts</div>
+                ):(
+                  <div style={{color:`${G.cream}66`,fontSize:12}}>❌ Réponse : {q.reponse}</div>
+                )}
+              </div>
+              <button onClick={next} style={Btn(true,{width:"100%",padding:"12px",fontSize:13,letterSpacing:2,textTransform:"uppercase"})}>
+                {isLast?"🏆 Résultats finaux":"Question suivante →"}
+              </button>
+            </div>
+          )}
+
+          {/* Scores rapides */}
+          <div style={{padding:"12px 14px",borderRadius:10,background:"rgba(255,255,255,0.05)",border:`1px solid ${G.gold}22`}}>
+            <div style={{color:`${G.gold}66`,fontSize:9,letterSpacing:2,marginBottom:8}}>SCORES EN TEMPS RÉEL</div>
+            {[...cons].sort((a,b)=>b.score-a.score).map((c,i)=>(
+              <div key={c.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:5,padding:"5px 8px",borderRadius:6,background:"rgba(0,0,0,0.2)"}}>
+                <div style={{display:"flex",alignItems:"center",gap:7}}>
+                  <span style={{fontSize:12}}>{i===0?"👑":i===1?"🥈":"🥉"}</span>
+                  <span style={{color:c.color,fontWeight:700,fontSize:12}}>{c.name}</span>
+                </div>
+                <span style={{color:G.gold,fontWeight:900,fontSize:14}}>{c.score} pts</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ══════════════════════════════════════
+   APP ROOT — détecte l'URL
+══════════════════════════════════════ */
 function App(){
-  const [phase,setPhase]=useState("setup");
-  const [data,setData]=useState(null);
-  const start=(c,q)=>{setData({c,q});setPhase("game");};
-  const reset=()=>{setData(null);setPhase("setup");};
-  if(phase==="setup") return <Setup onStart={start}/>;
-  return <Game consultants={data.c} questions={data.q} onReset={reset}/>;
+  const isNada=window.location.search.includes("nada");
+  const [mode,setMode]=useState(()=>isNada?"nada":"welcome");
+
+  // welcome → choisir le rôle
+  if(mode==="welcome"&&!isNada){
+    return(
+      <div style={{minHeight:"100vh",background:`linear-gradient(160deg,${G.dark},#071a10)`,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:24,padding:32}}>
+        <Logo size={28}/>
+        <h1 style={{color:G.cream,fontFamily:"'Playfair Display',serif",fontSize:28,letterSpacing:6,textAlign:"center"}}>RÉBUS CHOGAN</h1>
+
+        <div style={{display:"flex",flexDirection:"column",gap:12,width:"100%",maxWidth:440}}>
+          {/* Bouton écran public */}
+          <button onClick={()=>setMode("public")}
+            style={{padding:"18px 24px",borderRadius:14,border:`1px solid ${G.gold}44`,background:`${G.gold}10`,cursor:"pointer",textAlign:"left"}}>
+            <div style={{color:G.gold,fontWeight:700,fontSize:15,marginBottom:4}}>🖥️ Écran public — Zoom</div>
+            <div style={{color:`${G.cream}66`,fontSize:12}}>Partage cet onglet sur Zoom. Les participants voient uniquement les questions et les scores.</div>
+          </button>
+
+          {/* Bouton panneau Nada */}
+          <button onClick={()=>window.open(window.location.href+"?nada","_blank")}
+            style={{padding:"18px 24px",borderRadius:14,border:`1px solid ${G.gold}44`,background:"rgba(255,255,255,0.04)",cursor:"pointer",textAlign:"left"}}>
+            <div style={{color:G.goldL,fontWeight:700,fontSize:15,marginBottom:4}}>🔐 Panneau Nada — Privé</div>
+            <div style={{color:`${G.cream}66`,fontSize:12}}>S'ouvre dans un nouvel onglet. Accès aux contrôles, script et réponses. Ne pas partager sur Zoom.</div>
+          </button>
+
+          {/* Bouton configuration */}
+          <button onClick={()=>setMode("setup")}
+            style={{padding:"14px 24px",borderRadius:14,border:`1px solid ${G.gold}22`,background:"rgba(255,255,255,0.03)",cursor:"pointer",textAlign:"left"}}>
+            <div style={{color:`${G.cream}88`,fontWeight:700,fontSize:14,marginBottom:3}}>⚙ Configuration du jeu</div>
+            <div style={{color:`${G.cream}44`,fontSize:11}}>Modifier les participants, questions et images.</div>
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if(mode==="setup"){
+    const start=(cons,qs)=>{
+      const gs=makeState(cons,qs);
+      saveState(gs);
+      setMode("public");
+    };
+    return <Setup onStart={start}/>;
+  }
+
+  if(mode==="nada"||isNada) return <NadaPanel/>;
+  return <PublicScreen/>;
 }
 
 ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
