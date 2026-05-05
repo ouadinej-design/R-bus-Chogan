@@ -253,8 +253,8 @@ function Setup({onStart}){
 /* ══════════════════════════════════════
    ÉCRAN PUBLIC LUXE
 ══════════════════════════════════════ */
-function PublicScreen(){
-  const [gs,setGs]=useState(null);
+function PublicScreen({onBack}){
+  const [gs,setGs]=useState(()=>loadState());
   useEffect(()=>{
     const sync=()=>{const s=loadState();if(s)setGs(s);};
     sync();
@@ -268,7 +268,7 @@ function PublicScreen(){
       <Logo dark size={26}/>
       <div style={{textAlign:"center"}}>
         <div style={{color:G.light,fontSize:13,letterSpacing:3,fontWeight:600,animation:"pulse 2s infinite"}}>EN ATTENTE DU DÉMARRAGE…</div>
-        <div style={{color:"#ccc",fontSize:11,marginTop:8}}>La formatrice démarre le jeu depuis son onglet</div>
+        <div style={{color:"#ccc",fontSize:11,marginTop:8,marginBottom:20}}>Configurez le jeu depuis l'accueil</div>{onBack&&<button onClick={onBack} style={{padding:"10px 24px",borderRadius:999,border:"none",cursor:"pointer",fontWeight:700,background:"linear-gradient(135deg,#D4A017,#F5C842,#B8860B)",color:"white",fontSize:13}}>← Retour à l'accueil</button>}
       </div>
     </div>
   );
@@ -440,7 +440,7 @@ function FinalPublic({gs}){
    PANNEAU NADA — onglet privé (fond sombre conservé)
 ══════════════════════════════════════ */
 function NadaPanel(){
-  const [gs,setGs]=useState(null);
+  const [gs,setGs]=useState(()=>loadState());
   const sync=useCallback(()=>{const s=loadState();if(s)setGs(s);},[]);
   useEffect(()=>{sync();window.addEventListener("storage",sync);const t=setInterval(sync,200);return()=>{window.removeEventListener("storage",sync);clearInterval(t);};},[sync]);
 
@@ -587,48 +587,87 @@ function NadaPanel(){
 }
 
 /* ══════════════════════════════════════
+   WELCOME SCREEN
+══════════════════════════════════════ */
+function Welcome({setMode}){
+  const hasGame=!!loadState();
+  return(
+    <div style={{minHeight:"100vh",background:G.pearl,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:20,padding:32}}>
+      <Logo dark size={28}/>
+      <div style={{textAlign:"center",marginBottom:4}}>
+        <h1 style={{fontFamily:"'Playfair Display',serif",fontSize:32,fontWeight:900,letterSpacing:6,background:G.goldGrad,WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent",backgroundClip:"text"}}>RÉBUS CHOGAN</h1>
+        <p style={{color:G.light,fontSize:11,letterSpacing:3,fontWeight:600,marginTop:6}}>LIMITLESS TEAM</p>
+      </div>
+
+      <div style={{display:"flex",flexDirection:"column",gap:12,width:"100%",maxWidth:480}}>
+
+        {/* ── ÉTAPE 1 : Toujours configurer d'abord ── */}
+        <div style={{...card({padding:"20px 24px",border:`2px solid ${G.goldB}`,background:"linear-gradient(135deg,#FFFDF5,#FFFFF8)"})}}>
+          <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:12}}>
+            <div style={{width:32,height:32,borderRadius:"50%",background:G.goldGrad,display:"flex",alignItems:"center",justifyContent:"center",color:"white",fontWeight:900,fontSize:14,flexShrink:0}}>1</div>
+            <div>
+              <div style={{fontWeight:800,fontSize:15,background:G.goldGrad,WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent",backgroundClip:"text"}}>⚙ Configurer le jeu</div>
+              <div style={{color:G.light,fontSize:11,fontWeight:400,marginTop:2}}>Participants, questions, images</div>
+            </div>
+          </div>
+          <button onClick={()=>setMode("setup")} style={{...pill(true,{width:"100%",padding:"11px",fontSize:13})}}>
+            {hasGame?"✏ Reconfigurer":"Démarrer la configuration →"}
+          </button>
+        </div>
+
+        {/* ── ÉTAPE 2 : Écran public ── */}
+        <div style={{...card({padding:"18px 24px",opacity:hasGame?1:.5})}}>
+          <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:hasGame?12:0}}>
+            <div style={{width:32,height:32,borderRadius:"50%",background:hasGame?G.goldGrad:"#ddd",display:"flex",alignItems:"center",justifyContent:"center",color:"white",fontWeight:900,fontSize:14,flexShrink:0}}>2</div>
+            <div>
+              <div style={{fontWeight:800,fontSize:15,color:hasGame?G.dark:"#aaa"}}>🖥️ Écran public — Zoom</div>
+              <div style={{color:G.light,fontSize:11,fontWeight:400,marginTop:2}}>Partage CET onglet sur Zoom uniquement</div>
+            </div>
+          </div>
+          {hasGame&&<button onClick={()=>setMode("public")} style={{...pill(false,{width:"100%",padding:"11px",fontSize:13,border:`1px solid ${G.border}`})}}>
+            Ouvrir l'écran public →
+          </button>}
+        </div>
+
+        {/* ── ÉTAPE 3 : Panneau Nada ── */}
+        <div style={{...card({padding:"18px 24px",opacity:hasGame?1:.5,background:G.pearl})}}>
+          <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:hasGame?12:0}}>
+            <div style={{width:32,height:32,borderRadius:"50%",background:hasGame?G.goldGrad:"#ddd",display:"flex",alignItems:"center",justifyContent:"center",color:"white",fontWeight:900,fontSize:14,flexShrink:0}}>3</div>
+            <div>
+              <div style={{fontWeight:800,fontSize:15,color:hasGame?G.dark:"#aaa"}}>🔐 Panneau Nada — Privé</div>
+              <div style={{color:G.light,fontSize:11,fontWeight:400,marginTop:2}}>Nouvel onglet — ne PAS partager sur Zoom</div>
+            </div>
+          </div>
+          {hasGame&&<button onClick={()=>window.open(window.location.href.split("?")[0]+"?nada","_blank")} style={{...pill(false,{width:"100%",padding:"11px",fontSize:13,border:`1px solid ${G.border}`})}}>
+            Ouvrir le panneau Nada →
+          </button>}
+        </div>
+
+        {!hasGame&&(
+          <p style={{textAlign:"center",color:G.light,fontSize:11,fontWeight:500,marginTop:4}}>
+            ☝️ Commencez par configurer le jeu pour débloquer les étapes 2 et 3
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ══════════════════════════════════════
    APP ROOT
 ══════════════════════════════════════ */
 function App(){
   const isNada=window.location.search.includes("nada");
   const [mode,setMode]=useState(()=>isNada?"nada":"welcome");
 
-  if(mode==="welcome"&&!isNada){
-    return(
-      <div style={{minHeight:"100vh",background:G.pearl,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:20,padding:32}}>
-        <Logo dark size={28}/>
-        <div style={{textAlign:"center",marginBottom:8}}>
-          <h1 style={{fontFamily:"'Playfair Display',serif",fontSize:30,fontWeight:900,letterSpacing:6,background:G.goldGrad,WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent",backgroundClip:"text"}}>RÉBUS CHOGAN</h1>
-          <p style={{color:G.light,fontSize:11,letterSpacing:3,fontWeight:600,marginTop:4}}>LIMITLESS TEAM</p>
-        </div>
-
-        <div style={{display:"flex",flexDirection:"column",gap:12,width:"100%",maxWidth:460}}>
-          <button onClick={()=>setMode("public")} style={{...card({padding:"18px 24px",cursor:"pointer",textAlign:"left",border:`1.5px solid ${G.goldB}`,background:"linear-gradient(135deg,#FFFBF0,white)"}),...{border:"none"}}}>
-            <div style={{fontWeight:800,fontSize:15,marginBottom:4,background:G.goldGrad,WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent",backgroundClip:"text"}}>🖥️ Écran public — Zoom</div>
-            <div style={{color:G.light,fontSize:12,fontWeight:400}}>Partage cet onglet sur Zoom. Participants : indices, image, classement uniquement.</div>
-          </button>
-
-          <button onClick={()=>window.open(window.location.href+"?nada","_blank")} style={{...card({padding:"18px 24px",cursor:"pointer",textAlign:"left"}),...{border:"none"}}}>
-            <div style={{fontWeight:800,fontSize:15,marginBottom:4,color:G.dark}}>🔐 Panneau Nada — Privé</div>
-            <div style={{color:G.light,fontSize:12,fontWeight:400}}>Nouvel onglet. Script, réponses, contrôles. Ne pas partager sur Zoom.</div>
-          </button>
-
-          <button onClick={()=>setMode("setup")} style={{...card({padding:"16px 24px",cursor:"pointer",textAlign:"left",background:G.pearl}),...{border:"none"}}}>
-            <div style={{fontWeight:700,fontSize:14,marginBottom:3,color:G.mid}}>⚙ Configuration</div>
-            <div style={{color:G.light,fontSize:11,fontWeight:400}}>Modifier participants, questions et images.</div>
-          </button>
-        </div>
-      </div>
-    );
-  }
-
   if(mode==="setup"){
-    const start=(cons,qs)=>{saveState(makeState(cons,qs));setMode("public");};
+    const start=(cons,qs)=>{saveState(makeState(cons,qs));setMode("welcome");};
     return <Setup onStart={start}/>;
   }
 
   if(mode==="nada"||isNada) return <NadaPanel/>;
-  return <PublicScreen/>;
+  if(mode==="public") return <PublicScreen onBack={()=>setMode("welcome")}/>;
+  return <Welcome setMode={setMode}/>;
 }
 
 ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
