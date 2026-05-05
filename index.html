@@ -20,6 +20,8 @@
     @keyframes flash{0%,100%{transform:scale(1)}50%{transform:scale(1.05);box-shadow:0 8px 32px rgba(212,160,23,0.4)}}
     @keyframes pulse{0%,100%{opacity:.5}50%{opacity:1}}
     @keyframes glow{0%,100%{box-shadow:0 0 10px rgba(212,160,23,0.3)}50%{box-shadow:0 0 24px rgba(212,160,23,0.65)}}
+    @keyframes timerPulse{0%,100%{transform:scale(1)}50%{transform:scale(1.04)}}
+    @keyframes countdown{from{stroke-dashoffset:0}to{stroke-dashoffset:283}}
   </style>
 </head>
 <body>
@@ -103,6 +105,80 @@ const makeGame = (players,questions) => ({
   players: players.map(p=>({...p,score:0})),
   questions, results:{}, revealed:[], sel:null, flash:null,
 });
+
+/* ══════════════════════════════════════
+   TIMER HOOK + COMPOSANT
+   Style "Une question pour un champion"
+══════════════════════════════════════ */
+const TIMER_DURATION = 30; // secondes
+
+function useTimer(active) {
+  const [time, setTime]     = useState(TIMER_DURATION);
+  const [running, setRunning] = useState(false);
+  const intervalRef = useRef(null);
+
+  const start = useCallback(() => { setTime(TIMER_DURATION); setRunning(true); }, []);
+  const stop  = useCallback(() => { setRunning(false); clearInterval(intervalRef.current); }, []);
+  const reset = useCallback(() => { stop(); setTime(TIMER_DURATION); }, [stop]);
+
+  useEffect(() => {
+    if (running) {
+      intervalRef.current = setInterval(() => {
+        setTime(t => {
+          if (t <= 1) { clearInterval(intervalRef.current); setRunning(false); return 0; }
+          return t - 1;
+        });
+      }, 1000);
+    }
+    return () => clearInterval(intervalRef.current);
+  }, [running]);
+
+  // Reset when question changes
+  useEffect(() => { reset(); }, [active, reset]);
+
+  return { time, running, start, stop, reset };
+}
+
+function CircleTimer({ time, running, onStart, onReset }) {
+  const R = 44;
+  const circ = 2 * Math.PI * R; // ≈ 276
+  const progress = time / TIMER_DURATION;
+  const offset   = circ * (1 - progress);
+  const pct      = Math.round(progress * 100);
+  const color    = time > 10 ? "#D4A017" : time > 5 ? "#E67E22" : "#E05050";
+  const isUrgent = time <= 10 && running;
+
+  return (
+    <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:6}}>
+      <div style={{position:"relative",width:100,height:100,animation:isUrgent?"timerPulse .6s infinite":"none"}}>
+        <svg width="100" height="100" style={{transform:"rotate(-90deg)"}}>
+          {/* Piste fond */}
+          <circle cx="50" cy="50" r={R} fill="none" stroke="#f0f0f0" strokeWidth="7"/>
+          {/* Arc progression */}
+          <circle cx="50" cy="50" r={R} fill="none"
+            stroke={color} strokeWidth="7"
+            strokeDasharray={circ}
+            strokeDashoffset={offset}
+            strokeLinecap="round"
+            style={{transition:"stroke-dashoffset .9s linear, stroke .3s"}}
+          />
+        </svg>
+        {/* Chiffre central */}
+        <div style={{position:"absolute",inset:0,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center"}}>
+          <div style={{fontSize:26,fontWeight:900,fontFamily:"'Playfair Display',serif",color,lineHeight:1,transition:"color .3s"}}>{time}</div>
+          <div style={{fontSize:8,color:"#aaa",letterSpacing:1,fontWeight:600}}>SEC</div>
+        </div>
+      </div>
+      {/* Boutons */}
+      <div style={{display:"flex",gap:6}}>
+        {!running
+          ? <button onClick={onStart} style={{padding:"5px 14px",borderRadius:999,border:"none",cursor:"pointer",fontFamily:"inherit",fontWeight:700,fontSize:11,background:"linear-gradient(135deg,#D4A017,#F5C842,#B8860B)",color:"white",boxShadow:"0 3px 10px rgba(212,160,23,.3)"}}>▶ Démarrer</button>
+          : <button onClick={onReset} style={{padding:"5px 14px",borderRadius:999,border:"none",cursor:"pointer",fontFamily:"inherit",fontWeight:700,fontSize:11,background:"rgba(0,0,0,.07)",color:"#555"}}>↺ Reset</button>
+        }
+      </div>
+    </div>
+  );
+}
 
 /* ── LOGO ── */
 const Logo = ({sz=22}) => (
@@ -236,9 +312,8 @@ function Welcome({setMode}) {
     const g = makeGame(players,questions);
     lsSave(LS_STATE, g);
     setState(g);
-    // Publish to ntfy so Nada's phone gets it immediately
     ntfyPub(room, g);
-    setMode("public");
+    // ← Reste sur la page d'accueil pour montrer le QR code
   };
 
   if (!hasGame) return <Setup onStart={handleStart}/>;
@@ -340,6 +415,9 @@ function PublicScreen({onBack}) {
   const pts     = PTS[Math.max(1,gs.hints||0)]||10;
   const maxSc   = Math.max(1,...gs.players.map(p=>p.score));
 
+  // Timer côté écran public — se remet à zéro à chaque nouvelle question
+  const { time, running, start:startTimer, reset:resetTimer } = useTimer(gs.idx + "-" + gs.hints);
+
   return (
     <div style={{height:"100vh",background:G.pearl,display:"flex",flexDirection:"column",overflow:"hidden"}}>
       {/* Header */}
@@ -414,6 +492,13 @@ function PublicScreen({onBack}) {
           {(gs.hints||0)===0 && gs.phase==="play" && (
             <div style={{textAlign:"center",padding:10}}>
               <div style={{color:"#ccc",fontSize:12,letterSpacing:4,fontWeight:600,textTransform:"uppercase",animation:"pulse 2s infinite"}}>En attente du premier indice…</div>
+            </div>
+          )}
+
+          {/* Timer — visible après le 1er indice */}
+          {(gs.hints||0)>0 && gs.phase==="play" && (
+            <div style={{display:"flex",justifyContent:"center",paddingBottom:4}}>
+              <CircleTimer time={time} running={running} onStart={startTimer} onReset={resetTimer}/>
             </div>
           )}
           {(gs.hints||0)>0 && q?.hints?.slice(0,gs.hints).map((h,i)=>(
@@ -533,6 +618,9 @@ function NadaPanel() {
   const pts  = PTS[Math.max(1,gs.hints||0)]||10;
   const res  = gs.results?.[gs.idx];
 
+  // Timer Nada
+  const { time:nTime, running:nRunning, start:nStart, reset:nReset } = useTimer(gs.idx + "-" + gs.hints);
+
   const reveal = () => {
     if((gs.hints||0)>=q.hints.length) return;
     save({...gs, hints:(gs.hints||0)+1});
@@ -620,6 +708,16 @@ function NadaPanel() {
         {gs.phase==="play" && (
           <div style={nc()}>
             <div style={{color:N.light,fontSize:9,letterSpacing:2,textTransform:"uppercase",fontWeight:700,marginBottom:10}}>Contrôles</div>
+
+            {/* Chrono */}
+            {(gs.hints||0)>0 && (
+              <div style={{display:"flex",justifyContent:"center",marginBottom:12,padding:"8px",borderRadius:10,background:"rgba(0,0,0,.2)"}}>
+                <div style={{textAlign:"center"}}>
+                  <div style={{color:N.light,fontSize:9,letterSpacing:2,textTransform:"uppercase",fontWeight:700,marginBottom:6}}>⏱ Chronomètre</div>
+                  <CircleTimer time={nTime} running={nRunning} onStart={nStart} onReset={nReset}/>
+                </div>
+              </div>
+            )}
             <div style={{marginBottom:10}}>
               <div style={{color:N.light,fontSize:10,marginBottom:6}}>Qui a trouvé ?</div>
               <div style={{display:"flex",flexWrap:"wrap",gap:5}}>
