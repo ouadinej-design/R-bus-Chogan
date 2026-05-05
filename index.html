@@ -97,50 +97,117 @@ const inp=(extra={})=>({
   transition:"border 0.2s",...extra
 });
 
-/* ─── SYNC : BroadcastChannel + localStorage fallback ─── */
-const BC = typeof BroadcastChannel !== "undefined" ? new BroadcastChannel("rebus_chogan_bc") : null;
+/* ══════════════════════════════════════
+   SYNC VIA NTFY.SH — zéro config, zéro compte
+   Les 2 appareils communiquent via un code de salle
+══════════════════════════════════════ */
+
+const ROOM_KEY = "rebus_room_code";
+
+// Génère ou récupère le code de salle
+function getRoomCode() {
+  let code = localStorage.getItem(ROOM_KEY);
+  if (!code) {
+    code = "rebus-" + Math.random().toString(36).slice(2,8).toUpperCase();
+    localStorage.setItem(ROOM_KEY, code);
+  }
+  return code;
+}
+
+function getNtfyTopic() {
+  const params = new URLSearchParams(window.location.search);
+  return params.get("room") || getRoomCode();
+}
+
+// Publie l'état sur ntfy.sh (sans les images pour rester léger)
+async function publishState(state) {
+  const topic = getNtfyTopic();
+  const slim = {
+    ...state,
+    questions: (state.questions||[]).map(q=>({...q, image:""}))
+  };
+  try {
+    await fetch("https://ntfy.sh/" + topic, {
+      method: "POST",
+      headers: {"Content-Type":"application/json", "Priority":"urgent"},
+      body: JSON.stringify(slim)
+    });
+  } catch(e) {}
+}
 
 const saveState = s => {
+  // 1. localStorage (même appareil)
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify(s)); } catch(e) {}
-  try { if(BC) BC.postMessage(s); } catch(e) {}
+  // 2. BroadcastChannel (même navigateur)
+  try { if(typeof BroadcastChannel!=="undefined"){const bc=new BroadcastChannel("rebus_bc");bc.postMessage(s);setTimeout(()=>bc.close(),100);} } catch(e) {}
+  // 3. ntfy.sh (cross-device, internet) — sans images
+  publishState(s);
 };
+
 const loadState = () => {
   try { const r=localStorage.getItem(STORAGE_KEY); return r?JSON.parse(r):null; } catch(e) { return null; }
 };
+
 const makeState = (cons,qs) => ({
   phase:"play", idx:0, hintShown:0, results:{}, revealed:[],
   consultants:cons.map(c=>({...c,score:0})), questions:qs, flash:null, _selC:null
 });
 
-/* Hook de synchronisation temps réel */
+/* ─── HOOK SYNC UNIVERSEL ─── */
 function useGameSync() {
   const [gs, setGs] = useState(()=>loadState());
+  const setGsSafe = useCallback(s=>{ if(s) setGs(p=>({...p,...s})); },[]);
+  const localQsRef = useRef(null); // garde les questions avec images en local
+
+  // Merge : on réinjcte les images locales dans l'état reçu depuis ntfy
+  const mergeWithLocalImages = useCallback((remoteState) => {
+    const local = loadState();
+    if (!remoteState) return;
+    if (local && local.questions) {
+      remoteState.questions = remoteState.questions.map((q,i) => ({
+        ...q,
+        image: local.questions[i]?.image || q.image || ""
+      }));
+    }
+    setGs(remoteState);
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify({...remoteState, questions: local?.questions||remoteState.questions})); } catch(e) {}
+  }, []);
 
   useEffect(()=>{
-    // 1. BroadcastChannel — instantané entre fenêtres
-    const onBC = e => { if(e.data) setGs(e.data); };
-    if(BC) BC.addEventListener("message", onBC);
+    const topic = getNtfyTopic();
 
-    // 2. Storage event — entre onglets du même navigateur
+    // 1. ntfy.sh SSE — temps réel cross-device
+    let es = null;
+    try {
+      es = new EventSource("https://ntfy.sh/" + topic + "/sse");
+      es.onmessage = e => {
+        try {
+          const data = JSON.parse(e.data);
+          const msg = typeof data.message === "string" ? JSON.parse(data.message) : data.message;
+          if (msg && msg.phase) mergeWithLocalImages(msg);
+        } catch(err) {}
+      };
+    } catch(e) {}
+
+    // 2. BroadcastChannel — même navigateur
+    let bc = null;
+    try {
+      bc = new BroadcastChannel("rebus_bc");
+      bc.onmessage = e => { if(e.data && e.data.phase) setGs(e.data); };
+    } catch(e) {}
+
+    // 3. Storage event
     const onStorage = e => {
-      if(e.key === STORAGE_KEY && e.newValue) {
-        try { setGs(JSON.parse(e.newValue)); } catch(er) {}
-      }
+      if(e.key===STORAGE_KEY && e.newValue) try{ setGs(JSON.parse(e.newValue)); }catch(er){}
     };
     window.addEventListener("storage", onStorage);
 
-    // 3. Polling — filet de sécurité toutes les 300ms
-    const t = setInterval(()=>{
-      const s = loadState();
-      if(s) setGs(s);
-    }, 300);
-
     return () => {
-      if(BC) BC.removeEventListener("message", onBC);
+      if(es) es.close();
+      if(bc) bc.close();
       window.removeEventListener("storage", onStorage);
-      clearInterval(t);
     };
-  }, []);
+  }, [mergeWithLocalImages]);
 
   return [gs, setGs];
 }
@@ -624,68 +691,81 @@ function NadaPanel(){
    WELCOME SCREEN
 ══════════════════════════════════════ */
 function Welcome({setMode}){
-  const hasGame=!!loadState();
+  const hasGame = !!loadState();
+  const roomCode = getRoomCode();
+  const nadaUrl = window.location.origin + window.location.pathname + "?nada=" + roomCode;
+  const qrUrl = "https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=" + encodeURIComponent(nadaUrl);
+
+  const newRoom = () => {
+    localStorage.removeItem(ROOM_KEY);
+    localStorage.removeItem(STORAGE_KEY);
+    window.location.reload();
+  };
+
   return(
-    <div style={{minHeight:"100vh",background:G.pearl,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:20,padding:32}}>
-      <Logo dark size={28}/>
+    <div style={{minHeight:"100vh",background:G.pearl,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:14,padding:24,overflowY:"auto"}}>
+      <Logo dark size={26}/>
       <div style={{textAlign:"center",marginBottom:4}}>
-        <h1 style={{fontFamily:"'Playfair Display',serif",fontSize:32,fontWeight:900,letterSpacing:6,background:G.goldGrad,WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent",backgroundClip:"text"}}>RÉBUS CHOGAN</h1>
-        <p style={{color:G.light,fontSize:11,letterSpacing:3,fontWeight:600,marginTop:6}}>LIMITLESS TEAM</p>
+        <h1 style={{fontFamily:"'Playfair Display',serif",fontSize:30,fontWeight:900,letterSpacing:6,background:G.goldGrad,WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent",backgroundClip:"text"}}>RÉBUS CHOGAN</h1>
+        <p style={{color:G.light,fontSize:11,letterSpacing:3,fontWeight:600,marginTop:4}}>LIMITLESS TEAM</p>
       </div>
 
-      <div style={{display:"flex",flexDirection:"column",gap:12,width:"100%",maxWidth:480}}>
+      <div style={{display:"flex",flexDirection:"column",gap:10,width:"100%",maxWidth:480}}>
 
-        {/* ── ÉTAPE 1 : Toujours configurer d'abord ── */}
-        <div style={{...card({padding:"20px 24px",border:`2px solid ${G.goldB}`,background:"linear-gradient(135deg,#FFFDF5,#FFFFF8)"})}}>
-          <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:12}}>
-            <div style={{width:32,height:32,borderRadius:"50%",background:G.goldGrad,display:"flex",alignItems:"center",justifyContent:"center",color:"white",fontWeight:900,fontSize:14,flexShrink:0}}>1</div>
-            <div>
-              <div style={{fontWeight:800,fontSize:15,background:G.goldGrad,WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent",backgroundClip:"text"}}>⚙ Configurer le jeu</div>
-              <div style={{color:G.light,fontSize:11,fontWeight:400,marginTop:2}}>Participants, questions, images</div>
-            </div>
+        {/* Étape 1 — Config */}
+        <div style={card({padding:"16px 20px",borderRadius:14,border:`2px solid ${G.goldB}`,background:"linear-gradient(135deg,#FFFDF5,white)"})}>
+          <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:10}}>
+            <div style={{width:26,height:26,borderRadius:"50%",background:G.goldGrad,display:"flex",alignItems:"center",justifyContent:"center",color:"white",fontWeight:900,fontSize:11,flexShrink:0}}>1</div>
+            <div style={{fontWeight:800,fontSize:14,background:G.goldGrad,WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent",backgroundClip:"text"}}>⚙ Configurer le jeu (sur l'ordi)</div>
           </div>
-          <button onClick={()=>setMode("setup")} style={{...pill(true,{width:"100%",padding:"11px",fontSize:13})}}>
-            {hasGame?"✏ Reconfigurer":"Démarrer la configuration →"}
+          <button onClick={()=>setMode("setup")} style={pill(true,{width:"100%",padding:"10px"})}>
+            {hasGame?"✏ Reconfigurer →":"Démarrer la configuration →"}
           </button>
         </div>
 
-        {/* ── ÉTAPE 2 : Écran public ── */}
-        <div style={{...card({padding:"18px 24px",opacity:hasGame?1:.5})}}>
-          <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:hasGame?12:0}}>
-            <div style={{width:32,height:32,borderRadius:"50%",background:hasGame?G.goldGrad:"#ddd",display:"flex",alignItems:"center",justifyContent:"center",color:"white",fontWeight:900,fontSize:14,flexShrink:0}}>2</div>
+        {/* Étape 2 — QR code Nada */}
+        <div style={card({padding:"16px 20px",borderRadius:14,opacity:hasGame?1:.45})}>
+          <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:hasGame?12:0}}>
+            <div style={{width:26,height:26,borderRadius:"50%",background:hasGame?G.goldGrad:"#ddd",display:"flex",alignItems:"center",justifyContent:"center",color:"white",fontWeight:900,fontSize:11,flexShrink:0}}>2</div>
             <div>
-              <div style={{fontWeight:800,fontSize:15,color:hasGame?G.dark:"#aaa"}}>🖥️ Écran public — Zoom</div>
-              <div style={{color:G.light,fontSize:11,fontWeight:400,marginTop:2}}>Partage CET onglet sur Zoom uniquement</div>
+              <div style={{fontWeight:800,fontSize:14,color:hasGame?G.dark:"#aaa"}}>📱 Panneau Nada — sur ton téléphone</div>
+              {hasGame&&<div style={{color:G.light,fontSize:11,marginTop:1}}>Scanne ce QR code avec ton téléphone</div>}
             </div>
           </div>
-          {hasGame&&<button onClick={()=>setMode("public")} style={{...pill(false,{width:"100%",padding:"11px",fontSize:13,border:`1px solid ${G.border}`})}}>
-            Ouvrir l'écran public →
-          </button>}
+          {hasGame&&(
+            <div style={{display:"flex",alignItems:"center",gap:16,flexWrap:"wrap"}}>
+              <img src={qrUrl} style={{width:120,height:120,borderRadius:10,border:`2px solid ${G.goldB}`}} alt="QR Nada"/>
+              <div style={{flex:1,minWidth:140}}>
+                <div style={{color:G.light,fontSize:10,marginBottom:4,fontWeight:600}}>OU ouvre ce lien :</div>
+                <div style={{color:G.goldA,fontSize:11,fontWeight:700,wordBreak:"break-all",lineHeight:1.4}}>{nadaUrl}</div>
+                <div style={{marginTop:8,color:"#3A9960",fontSize:11,fontWeight:600}}>✅ Synchronisation auto via internet</div>
+              </div>
+            </div>
+          )}
         </div>
 
-        {/* ── ÉTAPE 3 : Panneau Nada ── */}
-        <div style={{...card({padding:"18px 24px",opacity:hasGame?1:.5,background:G.pearl})}}>
-          <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:hasGame?12:0}}>
-            <div style={{width:32,height:32,borderRadius:"50%",background:hasGame?G.goldGrad:"#ddd",display:"flex",alignItems:"center",justifyContent:"center",color:"white",fontWeight:900,fontSize:14,flexShrink:0}}>3</div>
+        {/* Étape 3 — Écran public */}
+        <div style={card({padding:"16px 20px",borderRadius:14,opacity:hasGame?1:.45})}>
+          <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:hasGame?10:0}}>
+            <div style={{width:26,height:26,borderRadius:"50%",background:hasGame?G.goldGrad:"#ddd",display:"flex",alignItems:"center",justifyContent:"center",color:"white",fontWeight:900,fontSize:11,flexShrink:0}}>3</div>
             <div>
-              <div style={{fontWeight:800,fontSize:15,color:hasGame?G.dark:"#aaa"}}>🔐 Panneau Nada — Privé</div>
-              <div style={{color:G.light,fontSize:11,fontWeight:400,marginTop:2}}>Nouvel onglet — ne PAS partager sur Zoom</div>
+              <div style={{fontWeight:800,fontSize:14,color:hasGame?G.dark:"#aaa"}}>🖥️ Écran public — partager sur Zoom</div>
+              {hasGame&&<div style={{color:G.light,fontSize:11,marginTop:1}}>Les participants voient uniquement cet écran</div>}
             </div>
           </div>
-          {hasGame&&<button onClick={()=>window.open(window.location.href.split("?")[0]+"?nada","_blank")} style={{...pill(false,{width:"100%",padding:"11px",fontSize:13,border:`1px solid ${G.border}`})}}>
-            Ouvrir le panneau Nada →
-          </button>}
+          {hasGame&&<button onClick={()=>setMode("public")} style={pill(false,{width:"100%",padding:"10px",border:`1px solid ${G.border}`})}>Ouvrir l'écran public →</button>}
         </div>
 
-        {!hasGame&&(
-          <p style={{textAlign:"center",color:G.light,fontSize:11,fontWeight:500,marginTop:4}}>
-            ☝️ Commencez par configurer le jeu pour débloquer les étapes 2 et 3
-          </p>
+        {hasGame&&(
+          <button onClick={newRoom} style={{background:"none",border:"none",color:"#ccc",fontSize:11,cursor:"pointer",textAlign:"center",padding:"4px",textDecoration:"underline"}}>
+            Réinitialiser le code de salle
+          </button>
         )}
       </div>
     </div>
   );
 }
+
 
 /* ══════════════════════════════════════
    APP ROOT
