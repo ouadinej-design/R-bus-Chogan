@@ -97,10 +97,53 @@ const inp=(extra={})=>({
   transition:"border 0.2s",...extra
 });
 
-/* ─── STORAGE ─── */
-const saveState=s=>{try{localStorage.setItem(STORAGE_KEY,JSON.stringify(s));}catch(e){}};
-const loadState=()=>{try{const r=localStorage.getItem(STORAGE_KEY);return r?JSON.parse(r):null;}catch(e){return null;}};
-const makeState=(cons,qs)=>({phase:"play",idx:0,hintShown:0,results:{},revealed:[],consultants:cons.map(c=>({...c,score:0})),questions:qs,flash:null,_selC:null});
+/* ─── SYNC : BroadcastChannel + localStorage fallback ─── */
+const BC = typeof BroadcastChannel !== "undefined" ? new BroadcastChannel("rebus_chogan_bc") : null;
+
+const saveState = s => {
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(s)); } catch(e) {}
+  try { if(BC) BC.postMessage(s); } catch(e) {}
+};
+const loadState = () => {
+  try { const r=localStorage.getItem(STORAGE_KEY); return r?JSON.parse(r):null; } catch(e) { return null; }
+};
+const makeState = (cons,qs) => ({
+  phase:"play", idx:0, hintShown:0, results:{}, revealed:[],
+  consultants:cons.map(c=>({...c,score:0})), questions:qs, flash:null, _selC:null
+});
+
+/* Hook de synchronisation temps réel */
+function useGameSync() {
+  const [gs, setGs] = useState(()=>loadState());
+
+  useEffect(()=>{
+    // 1. BroadcastChannel — instantané entre fenêtres
+    const onBC = e => { if(e.data) setGs(e.data); };
+    if(BC) BC.addEventListener("message", onBC);
+
+    // 2. Storage event — entre onglets du même navigateur
+    const onStorage = e => {
+      if(e.key === STORAGE_KEY && e.newValue) {
+        try { setGs(JSON.parse(e.newValue)); } catch(er) {}
+      }
+    };
+    window.addEventListener("storage", onStorage);
+
+    // 3. Polling — filet de sécurité toutes les 300ms
+    const t = setInterval(()=>{
+      const s = loadState();
+      if(s) setGs(s);
+    }, 300);
+
+    return () => {
+      if(BC) BC.removeEventListener("message", onBC);
+      window.removeEventListener("storage", onStorage);
+      clearInterval(t);
+    };
+  }, []);
+
+  return [gs, setGs];
+}
 
 /* ══════════════════════════════════════
    LOGO LUXE
@@ -254,14 +297,7 @@ function Setup({onStart}){
    ÉCRAN PUBLIC LUXE
 ══════════════════════════════════════ */
 function PublicScreen({onBack}){
-  const [gs,setGs]=useState(()=>loadState());
-  useEffect(()=>{
-    const sync=()=>{const s=loadState();if(s)setGs(s);};
-    sync();
-    window.addEventListener("storage",sync);
-    const t=setInterval(sync,250);
-    return()=>{window.removeEventListener("storage",sync);clearInterval(t);};
-  },[]);
+  const [gs,setGs]=useGameSync();
 
   if(!gs) return(
     <div style={{height:"100vh",background:G.pearl,display:"flex",alignItems:"center",justifyContent:"center",flexDirection:"column",gap:24}}>
@@ -440,9 +476,7 @@ function FinalPublic({gs}){
    PANNEAU NADA — onglet privé (fond sombre conservé)
 ══════════════════════════════════════ */
 function NadaPanel(){
-  const [gs,setGs]=useState(()=>loadState());
-  const sync=useCallback(()=>{const s=loadState();if(s)setGs(s);},[]);
-  useEffect(()=>{sync();window.addEventListener("storage",sync);const t=setInterval(sync,200);return()=>{window.removeEventListener("storage",sync);clearInterval(t);};},[sync]);
+  const [gs,setGs]=useGameSync();
 
   const update=(patch)=>{const next={...gs,...patch};setGs(next);saveState(next);};
 
